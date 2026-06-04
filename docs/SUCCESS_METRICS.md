@@ -28,4 +28,3 @@ These targets are research gates, not profit guarantees.
 - API, database, ingestion foundation, features foundation, and dashboard can run locally.
 - Test suite passes.
 - `/health` endpoint returns status `ok`.
-

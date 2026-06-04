@@ -33,4 +33,3 @@ Data Sources
 ## Safety Boundary
 
 The platform produces research outputs and advisory recommendations only. No broker integration or live execution is included in the MVP.
-

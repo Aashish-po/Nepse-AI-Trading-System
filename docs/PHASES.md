@@ -24,4 +24,3 @@ Completion criteria:
 ## Deferred Work
 
 Advanced AI, RL, GNN, meta-learning, Kubernetes, and live-trading-adjacent workflows are deferred until the MVP proves data quality and backtesting reliability.
-
