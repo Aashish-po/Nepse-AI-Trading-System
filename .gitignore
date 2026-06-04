@@ -1,0 +1,68 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Python virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Python caches and compiled files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Build and packaging artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Local databases and runtime files
+*.db
+*.sqlite
+*.sqlite3
+*.log
+*.pid
+
+# Data and generated research outputs
+data/raw/*
+!data/raw/.gitkeep
+data/processed/
+data/reports/
+artifacts/
+reports/
+exports/
+
+# ML and experiment tracking outputs
+mlruns/
+models/
+checkpoints/
+tensorboard/
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+research/notebooks/.ipynb_checkpoints/
+
+# Docker and local infrastructure state
+docker-compose.override.yml
+infra/docker-compose.override.yml
+postgres_data/
+redis_data/
+
+# IDE and OS noise
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+.DS_Store
+Thumbs.db
+
