@@ -22,3 +22,19 @@ class FeatureBatchResponse(BaseModel):
     processed_dates: int
     inserted_rows: int
     features_computed: list[str]
+
+
+class MultiStockFeatureRequest(BaseModel):
+    symbols: list[str]
+    start_date: str | None = None
+    end_date: str | None = None
+
+
+class MultiStockFeatureResponse(BaseModel):
+    feature_version: str
+    symbols_requested: int
+    symbols_succeeded: int
+    total_processed_dates: int
+    total_gated_dates: int
+    total_inserted_rows: int
+    errors: list[dict[str, str]]

@@ -16,7 +16,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-import backend.app.models  #   (direct import)
+import backend.app.models  # noqa: F401  # required for SQLAlchemy model registration
 from backend.app.db.base import Base
 from backend.app.db.session import get_db
 from backend.app.main import create_app
