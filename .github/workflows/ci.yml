@@ -28,9 +28,9 @@ jobs:
       - name: Test
         run: pytest
         env:
-          PYTHONPATH: .
+          PYTHONPATH: ${{ github.workspace }}
 
       - name: API import smoke check
         run: python -c "from backend.app.main import app; print(app.title)"
         env:
-          PYTHONPATH: .
+          PYTHONPATH: ${{ github.workspace }}
