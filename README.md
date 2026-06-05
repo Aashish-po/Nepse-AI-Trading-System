@@ -27,6 +27,46 @@ Phase 0 establishes the project foundation:
 - Infrastructure: Docker Compose first, Kubernetes later
 - Testing: pytest
 
+## Project Structure
+
+```
+backend/
+  app/
+    main.py           # FastAPI application entry point
+    api/
+      routes/
+        health.py     # Health check endpoint
+        auth.py       # Authentication endpoints
+        market.py     # Market data endpoints
+    core/
+      config.py       # Application configuration
+      logging.py      # Logging configuration
+    models/
+      stock.py        # Stock ORM model
+      price.py        # Price ORM model
+      ...             # Other models (signal, strategy, trade, etc.)
+    schemas/
+      market.py       # Pydantic schemas for market data
+    services/
+      market.py       # Market data business logic
+    db/
+      session.py      # Database session management
+      migrations/     # Alembic migrations
+  tests/
+    test_health.py
+    test_auth.py
+    test_market.py
+    conftest.py
+```
+
+## API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | /health | Health check endpoint |
+| POST | /ingest | Ingest market price data for a stock |
+| GET | /market/prices | List price data (optional symbol filter) |
+
 ## Local Setup
 
 ```powershell
@@ -36,7 +76,7 @@ python -m pip install -U pip
 pip install -r requirements-dev.txt
 copy .env.example .env
 pytest
-uvicorn backend.app.main:app --reload
+uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --app-dir .
 ```
 
 Open `http://127.0.0.1:8000/health` to verify the API.
@@ -50,5 +90,3 @@ docker compose -f infra/docker-compose.yml up --build
 ## Research Boundary
 
 The MVP is intentionally limited to ingestion, data quality, features, realistic backtesting, strategy research, dashboards, and advisory outputs. Live trading, broker execution, and autonomous financial advice are out of scope.
-
-# Nepse-AI-Trading-System
