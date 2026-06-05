@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 from datetime import date
-
 from typing import Any
 
 import numpy as np
@@ -21,6 +20,7 @@ from backend.app.models.feature import Feature
 from backend.app.models.price import Price
 from backend.app.models.stock import Stock
 from backend.app.services.data_quality_gate import DataQualityGate, DataQualityGateError
+
 logger = logging.getLogger(__name__)
 
 FEATURE_VERSION = "v1.0.0"
