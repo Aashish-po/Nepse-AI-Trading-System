@@ -1,12 +1,20 @@
 from collections.abc import Generator
 
+import sys
+import os
+
+# MUST COME FIRST — before ANY backend imports
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../"))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-import backend.app.models  # noqa: F401
+from backend.app import models  # noqa: F401
 from backend.app.db.base import Base
 from backend.app.db.session import get_db
 from backend.app.main import create_app
