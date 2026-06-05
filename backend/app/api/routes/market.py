@@ -10,6 +10,7 @@ from backend.app.services.market import ingest_price, list_prices
 router = APIRouter(prefix="/market", tags=["market"])
 DbSession = Annotated[Session, Depends(get_db)]
 PriceLimit = Annotated[int, Query(ge=1, le=1000)]
+PriceOffset = Annotated[int, Query(ge=0)]
 
 
 @router.get("/prices", response_model=list[PriceResponse])
@@ -17,8 +18,9 @@ def get_prices(
     db: DbSession,
     symbol: str | None = None,
     limit: PriceLimit = 100,
+    offset: PriceOffset = 0,
 ) -> list[PriceResponse]:
-    rows = list_prices(db, symbol=symbol, limit=limit)
+    rows = list_prices(db, symbol=symbol, limit=limit, offset=offset)
     return [
         PriceResponse(
             symbol=stock.symbol,

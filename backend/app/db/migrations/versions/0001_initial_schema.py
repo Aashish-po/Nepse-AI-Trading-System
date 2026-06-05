@@ -99,7 +99,12 @@ def upgrade() -> None:
         sa.UniqueConstraint("stock_id", "date", name="uq_prices_stock_id_date"),
     )
     op.create_index("ix_prices_date", "prices", ["date"], unique=False)
-    op.create_index("ix_prices_stock_id_date_desc", "prices", ["stock_id", "date"], unique=False)
+    op.create_index(
+        "ix_prices_stock_id_date_desc",
+        "prices",
+        ["stock_id", sa.text("date DESC")],
+        unique=False,
+    )
 
     op.create_table(
         "features",

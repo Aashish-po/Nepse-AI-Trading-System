@@ -39,8 +39,9 @@ def list_prices(
     db: Session,
     symbol: str | None = None,
     limit: int = 100,
+    offset: int = 0,
 ) -> list[tuple[Price, Stock]]:
     query = select(Price, Stock).join(Stock, Price.stock_id == Stock.id).order_by(Price.date.desc())
     if symbol:
         query = query.where(Stock.symbol == symbol.upper())
-    return list(db.execute(query.limit(limit)).all())
+    return list(db.execute(query.limit(limit).offset(offset)).all())
