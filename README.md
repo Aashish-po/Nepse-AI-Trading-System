@@ -29,7 +29,7 @@ Phase 0 establishes the project foundation:
 
 ## Project Structure
 
-```
+```text
 backend/
   app/
     main.py           # FastAPI application entry point
