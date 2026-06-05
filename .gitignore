@@ -45,9 +45,14 @@ exports/
 
 # ML and experiment tracking outputs
 mlruns/
-models/
 checkpoints/
 tensorboard/
+# Ignore trained ML model binaries (place in top-level models/ directory for local development)
+*.pkl
+*.h5
+*.onnx
+*.pt
+*.joblib
 
 # Notebook checkpoints
 .ipynb_checkpoints/

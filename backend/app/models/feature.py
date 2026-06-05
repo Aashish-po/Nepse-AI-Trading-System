@@ -1,0 +1,25 @@
+from datetime import date
+
+from sqlalchemy import Date, Float, ForeignKey, Index, String, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column
+
+from backend.app.db.base import Base
+from backend.app.models.types import big_int_pk_type, json_dict_type
+
+
+class Feature(Base):
+    __tablename__ = "features"
+    __table_args__ = (
+        UniqueConstraint(
+            "stock_id", "date", "feature_version",
+            name="uq_features_stock_date_version"
+        ),
+        Index("ix_features_stock_id_date", "stock_id", "date"),
+    )
+
+    id: Mapped[int] = mapped_column(big_int_pk_type, primary_key=True)
+    stock_id: Mapped[int] = mapped_column(ForeignKey("stocks.id"), nullable=False)
+    date: Mapped[date] = mapped_column(Date, nullable=False)
+    feature_version: Mapped[str] = mapped_column(String(50), nullable=False)
+    trust_score: Mapped[float] = mapped_column(Float, nullable=True)
+    values: Mapped[dict] = mapped_column(json_dict_type, nullable=False)

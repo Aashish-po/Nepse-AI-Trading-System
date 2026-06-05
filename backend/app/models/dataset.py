@@ -1,0 +1,14 @@
+from sqlalchemy import String
+from sqlalchemy.orm import Mapped, mapped_column
+
+from backend.app.db.base import Base
+from backend.app.models.types import json_dict_type
+
+
+class Dataset(Base):
+    __tablename__ = "datasets"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    version: Mapped[str] = mapped_column(String(50), nullable=False)
+    dataset_metadata: Mapped[dict] = mapped_column("metadata", json_dict_type, nullable=True)
