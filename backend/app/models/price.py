@@ -1,4 +1,4 @@
-from datetime import date
+import datetime
 from decimal import Decimal
 
 from sqlalchemy import Date, ForeignKey, Index, Numeric, UniqueConstraint, desc
@@ -17,7 +17,7 @@ class Price(Base):
 
     id: Mapped[int] = mapped_column(big_int_pk_type, primary_key=True)
     stock_id: Mapped[int] = mapped_column(ForeignKey("stocks.id"), nullable=False)
-    date: Mapped[date] = mapped_column(Date, index=True, nullable=False)
+    date: Mapped[datetime.date] = mapped_column(Date, index=True, nullable=False)
     open: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=True)
     high: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=True)
     low: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=True)

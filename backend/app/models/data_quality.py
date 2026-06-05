@@ -1,4 +1,4 @@
-from datetime import date
+import datetime
 
 from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, Float, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
@@ -10,7 +10,7 @@ class HolidayCalendar(Base):
     __tablename__ = "holiday_calendar"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    date: Mapped[date] = mapped_column(Date, nullable=False, unique=True)
+    date: Mapped[datetime.date] = mapped_column(Date, nullable=False, unique=True)
     description: Mapped[str] = mapped_column(String(255), nullable=True)
     is_trading_holiday: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_trading_day: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
@@ -25,7 +25,7 @@ class DataTrust(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     stock_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    date: Mapped[date] = mapped_column(Date, nullable=False)
+    date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     trust_score: Mapped[float] = mapped_column(Float, nullable=False)
     completeness_score: Mapped[float] = mapped_column(Float, nullable=True)
     volume_anomaly_detected: Mapped[bool] = mapped_column(Boolean, nullable=True)
@@ -38,7 +38,7 @@ class DataQualityReport(Base):
     __tablename__ = "data_quality_reports"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    report_date: Mapped[date] = mapped_column(Date, nullable=False, unique=True)
+    report_date: Mapped[datetime.date] = mapped_column(Date, nullable=False, unique=True)
     total_symbols: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     symbols_passed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     symbols_failed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
