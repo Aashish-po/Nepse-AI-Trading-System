@@ -13,6 +13,7 @@ from backend.app.db.session import SessionLocal
 from backend.app.models.data_source import IngestionLog
 from backend.app.models.price import Price
 from backend.app.models.stock import Stock
+from backend.app.services.data_quality import DataQualityService
 
 MAX_RETRIES = 3
 
@@ -85,6 +86,15 @@ class IngestionService:
                 }
             )
             session.commit()
+
+            if inserted > 0 and not dry_run:
+                try:
+                    dq = DataQualityService(session=session)
+                    for r in normalized:
+                        dq.evaluate_symbol_date(r["symbol"], r["date"].isoformat(), session=session)
+                except Exception:  # noqa: BLE001
+                    pass
+
             return {
                 "fetched": len(raw_data),
                 "inserted": inserted,

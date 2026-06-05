@@ -34,7 +34,7 @@ def upgrade() -> None:
     op.create_table(
         "ingestion_logs",
         sa.Column("id", sa.Integer(), nullable=False),
-        sa.Column("source", sa.String(length=100), nullable=False),
+        sa.Column("source", sa.String(length=100), nullable=True),
         sa.Column("status", sa.String(length=20), nullable=False, server_default="failed"),
         sa.Column("records_fetched", sa.Integer(), nullable=False, server_default="0"),
         sa.Column("records_inserted", sa.Integer(), nullable=False, server_default="0"),
