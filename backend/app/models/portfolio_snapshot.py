@@ -1,4 +1,4 @@
-import datetime 
+import datetime
 from decimal import Decimal
 
 from sqlalchemy import Date, ForeignKey, Numeric
