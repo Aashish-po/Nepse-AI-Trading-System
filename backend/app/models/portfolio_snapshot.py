@@ -1,4 +1,4 @@
-from datetime import date
+import datetime 
 from decimal import Decimal
 
 from sqlalchemy import Date, ForeignKey, Numeric
@@ -13,7 +13,7 @@ class PortfolioSnapshot(Base):
 
     id: Mapped[int] = mapped_column(big_int_pk_type, primary_key=True)
     backtest_id: Mapped[int] = mapped_column(ForeignKey("backtests.id"), nullable=False)
-    date: Mapped[date] = mapped_column(Date, nullable=False)
+    date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     equity: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
     cash: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
     positions: Mapped[dict] = mapped_column(json_dict_type, nullable=False)

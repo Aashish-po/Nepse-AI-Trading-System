@@ -1,4 +1,4 @@
-from datetime import date
+import datetime
 
 from sqlalchemy import Date, Float, ForeignKey, Index, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
@@ -19,7 +19,8 @@ class Feature(Base):
 
     id: Mapped[int] = mapped_column(big_int_pk_type, primary_key=True)
     stock_id: Mapped[int] = mapped_column(ForeignKey("stocks.id"), nullable=False)
-    date: Mapped[date] = mapped_column(Date, nullable=False)
+    date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     feature_version: Mapped[str] = mapped_column(String(50), nullable=False)
     trust_score: Mapped[float] = mapped_column(Float, nullable=True)
     values: Mapped[dict] = mapped_column(json_dict_type, nullable=False)
+    
