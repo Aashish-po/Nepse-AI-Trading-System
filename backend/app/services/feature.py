@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 from datetime import date
-from pyexpat import features
+
 from typing import Any
 
 import numpy as np
