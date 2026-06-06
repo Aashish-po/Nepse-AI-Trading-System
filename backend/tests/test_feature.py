@@ -224,10 +224,11 @@ def test_trust_aware_scaling_rsi() -> None:
     trust_score = 0.8
     feature_weight = 1.0
 
-    scaled = service._apply_trust_scaling(features, trust_score, feature_weight)
+    scaled, confidence = service._apply_trust_scaling(features, trust_score, feature_weight)
     assert scaled["rsi_14"] == 0.75 * 0.8 * 1.0
     assert scaled["rsi_21"] == 0.5 * 0.8 * 1.0
     assert scaled["sma_20"] == 100.0
+    assert confidence == 0.8
 
 
 def test_trust_aware_scaling_volatility() -> None:
@@ -236,7 +237,7 @@ def test_trust_aware_scaling_volatility() -> None:
     trust_score = 0.9
     feature_weight = 0.5
 
-    scaled = service._apply_trust_scaling(features, trust_score, feature_weight)
+    scaled, confidence = service._apply_trust_scaling(features, trust_score, feature_weight)
     assert scaled["volatility_20"] == 0.02 * 0.9 * 0.5
     assert scaled["rsi_14"] == 0.75 * 0.9 * 0.5
 
@@ -245,9 +246,10 @@ def test_trust_aware_scaling_null_trust() -> None:
     service = FeatureService()
     features = {"rsi_14": 75.0, "sma_20": 100.0}
 
-    scaled = service._apply_trust_scaling(features, None, 1.0)
+    scaled, confidence = service._apply_trust_scaling(features, None, 1.0)
     assert scaled["rsi_14"] is None
     assert scaled["sma_20"] is None
+    assert confidence is None
 
 
 def test_compute_bulk_returns_expected_format(db_session: Session) -> None:

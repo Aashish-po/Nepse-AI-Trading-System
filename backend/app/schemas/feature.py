@@ -1,3 +1,5 @@
+from typing import Any
+
 from pydantic import BaseModel
 
 
@@ -52,4 +54,6 @@ class FeatureRetrieveResponse(BaseModel):
     feature_version: str
     trust_score: float | None = None
     trust_version: str | None = None
+    confidence: float | None = None
+    features_meta: dict[str, Any] | None = None
     features: dict[str, float | None] | None = None

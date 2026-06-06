@@ -81,5 +81,11 @@ redis_data/
 .idea/
 .DS_Store
 Thumbs.db
-.kilo
+.kilo/.gitignore
+.kilonix/.gitignore
+.kilonix/projects/.gitignore
+.kilonix/registry/.gitignore
+.kilonix/registry/registry.db
+.kilo/plans/
+
 

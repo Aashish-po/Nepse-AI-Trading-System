@@ -39,7 +39,6 @@ class FeatureService:
         self._session = session
         self._feature_version = feature_version
 
-    # ✅ ADD THIS METHOD (fixes your error)
     def _to_array(self, series: pd.Series) -> NDArray[np.float64]:
         """Convert pandas Series to clean NumPy float64 array."""
         return series.to_numpy(dtype=np.float64, copy=False)
@@ -162,18 +161,20 @@ class FeatureService:
             features_df = self._compute_all_features(safe_df)
 
             correlation_penalty = self._apply_correlation_penalty(symbol, sess)
+            confidences: list[float | None] = []
             for i, (_, row) in enumerate(features_df.iterrows()):
                 if i < len(trust_scores):
-                    scaled_features = self._apply_trust_scaling(
+                    scaled_features, confidence = self._apply_trust_scaling(
                         {str(k): v for k, v in row.drop("date").items()},
                         trust_scores[i],
                         feature_weights[i] * correlation_penalty,
                     )
+                    confidences.append(confidence)
                     for k, v in scaled_features.items():
                         features_df.iat[i, features_df.columns.get_loc(k)] = v  # type: ignore[index]
 
             inserted_count = self._bulk_persist_features(
-                features_df, stock.id, trust_scores, trust_versions, session=sess
+                features_df, stock.id, trust_scores, trust_versions, confidences, session=sess
             )
 
             return {
@@ -264,21 +265,23 @@ class FeatureService:
         features: dict[str, Any],
         trust_score: float | None,
         feature_weight: float,
-    ) -> dict[str, float | None]:
+    ) -> tuple[dict[str, float | None], float | None]:
+        confidence = None
         if trust_score is None or feature_weight <= 0:
-            return {k: None for k in features.keys()}
+            return {k: None for k in features.keys()}, confidence
 
+        confidence = max(0.0, min(1.0, trust_score * feature_weight))
         scaled: dict[str, float | None] = {}
         for k, v in features.items():
             if v is None or np.isnan(v) if isinstance(v, float) else False:
                 scaled[k] = None
             elif k in ("rsi_14", "rsi_21"):
-                scaled[k] = (v / 100.0) * trust_score * feature_weight
+                scaled[k] = (v / 100.0) * confidence
             elif k in ("volatility_20",):
-                scaled[k] = v * trust_score * feature_weight
+                scaled[k] = v * confidence
             else:
                 scaled[k] = v
-        return scaled
+        return scaled, confidence
 
     def _apply_event_overrides(self, symbol: str, date_str: str) -> float:
         sess = self._get_session()
@@ -547,6 +550,19 @@ class FeatureService:
                 raise ValueError(f"Stock {symbol} not found")
 
             trust_version = self._get_trust_version_for_date(symbol, date_str, session)
+            gate = self._gate if session is None else DataQualityGate(session=session)
+            feature_weight = gate.get_feature_weight(symbol, date_str)
+            correlation_penalty = self._apply_correlation_penalty(symbol, session)
+
+            confidence = None
+            if trust_score is not None and feature_weight > 0:
+                confidence = trust_score * feature_weight * correlation_penalty
+
+            features_meta = {
+                "scaled_by_trust": trust_score is not None,
+                "event_adjusted": False,
+                "correlation_penalized": correlation_penalty < 1.0,
+            }
 
             feature = Feature(
                 stock_id=stock.id,
@@ -554,6 +570,8 @@ class FeatureService:
                 feature_version=self._feature_version,
                 trust_score=trust_score,
                 trust_version=trust_version,
+                confidence=confidence,
+                features_meta=features_meta,
                 values=features,
             )
             session.merge(feature)
@@ -571,6 +589,7 @@ class FeatureService:
         stock_id: int,
         trust_scores: list[float] | None = None,
         trust_versions: list[str] | None = None,
+        confidences: list[float | None] | None = None,
         session: Session | None = None,
     ) -> int:
         sess = session or self._get_session()
@@ -585,6 +604,16 @@ class FeatureService:
                 trust_ver = (
                     trust_versions[idx] if trust_versions and idx < len(trust_versions) else None
                 )
+                confidence = confidences[idx] if confidences and idx < len(confidences) else None
+
+                features_meta = {
+                    "scaled_by_trust": trust is not None,
+                    "event_adjusted": False,
+                    "correlation_penalized": confidence is not None
+                    and confidence < trust_scores[idx]
+                    if trust_scores and idx < len(trust_scores)
+                    else False,
+                }
 
                 features_to_insert.append(
                     Feature(
@@ -593,6 +622,8 @@ class FeatureService:
                         feature_version=self._feature_version,
                         trust_score=trust,
                         trust_version=trust_ver,
+                        confidence=confidence,
+                        features_meta=features_meta,
                         values=clean_values,
                     )
                 )
@@ -648,6 +679,8 @@ class FeatureService:
                 "feature_version": feature.feature_version,
                 "trust_score": feature.trust_score,
                 "trust_version": feature.trust_version,
+                "confidence": feature.confidence,
+                "features_meta": feature.features_meta,
                 "features": feature.values,
             }
         finally:
