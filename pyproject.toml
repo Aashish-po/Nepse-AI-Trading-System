@@ -2,10 +2,92 @@
 testpaths = ["backend/tests"]
 pythonpath = ["."]
 
+
+# -----------------------------------
+# ✅ Ruff Configuration
+# -----------------------------------
 [tool.ruff]
 line-length = 100
 target-version = "py311"
 
-[tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
+# Respect common ignores
+exclude = [
+    ".git",
+    "__pycache__",
+    ".venv",
+    "venv",
+    "migrations",
+    "alembic",
+    "node_modules",
+    "dist",
+    "build",
+]
 
+fix = true
+show-fixes = true
+
+
+# -----------------------------------
+# ✅ Lint Rules
+# -----------------------------------
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle
+    "F",   # pyflakes
+    "I",   # imports (important)
+    "UP",  # pyupgrade
+    "B",   # bugbear
+]
+
+ignore = [
+    "E501",   # line length handled separately
+    "B008",   # FastAPI dependency injection
+]
+
+dummy-variable-rgx = "^_.*"
+
+
+# -----------------------------------
+# ✅ Import Sorting (fixes your CI issue)
+# -----------------------------------
+[tool.ruff.lint.isort]
+
+combine-as-imports = true
+
+known-first-party = ["backend"]
+known-third-party = [
+    "fastapi",
+    "pydantic",
+    "sqlalchemy",
+    "numpy",
+    "pandas",
+]
+
+section-order = [
+    "future",
+    "standard-library",
+    "third-party",
+    "first-party",
+    "local-folder"
+]
+
+
+# -----------------------------------
+# ✅ Formatter (Black-like style)
+# -----------------------------------
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+
+# -----------------------------------
+# ✅ Per-file Relaxations
+# -----------------------------------
+[tool.ruff.lint.per-file-ignores]
+
+# Tests can be flexible
+"tests/*" = ["ARG", "S101"]
+
+# Ignore noise in migrations
+"migrations/*" = ["E501", "F401"]
+"alembic/*" = ["E501", "F401"]

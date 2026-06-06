@@ -1,4 +1,4 @@
-import datetime
+﻿import datetime
 
 from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, Float, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
@@ -47,4 +47,45 @@ class DataQualityReport(Base):
     total_missing_dates: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_volume_anomalies: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     details: Mapped[str] = mapped_column(Text, nullable=True)
-    created_at: Mapped[DateTime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+
+
+class DataQualityAlert(Base):
+
+    __tablename__ = "data_quality_alerts"
+
+    __table_args__ = (
+        CheckConstraint("severity IN ('critical', 'warning', 'info')", name="ck_alert_severity"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    report_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    symbol: Mapped[str] = mapped_column(String(20), nullable=False)
+    date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
+    severity: Mapped[str] = mapped_column(String(20), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    details: Mapped[str] = mapped_column(Text, nullable=True)
+    acknowledged: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+
+
+class SystemModeHistory(Base):
+    __tablename__ = "system_mode_history"
+
+    __table_args__ = (
+        CheckConstraint(
+            "mode IN ('NORMAL', 'DEGRADED', 'SAFE_MODE')", name="ck_system_mode"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    timestamp: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    mode: Mapped[str] = mapped_column(String(20), nullable=False)
+    unsafe_ratio: Mapped[float] = mapped_column(Float, nullable=False)
+    total_symbols: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

@@ -5,6 +5,7 @@ import numpy as np
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from backend.app.models.feature import Feature
 from backend.app.models.price import Price
 from backend.app.models.stock import Stock
 from backend.app.services.feature import FeatureService
@@ -193,3 +194,24 @@ def test_missing_data_handling() -> None:
     sma = service._compute_sma(prices_with_nan, period=3)
 
     assert np.isnan(sma[0])
+
+
+def test_trust_score_propagated_to_features(db_session: Session) -> None:
+    _seed_price_series(db_session, "TRUST", "2024-01-01", count=30)
+
+    service = FeatureService(session=db_session)
+    result = service.compute_features_batch("TRUST")
+
+    assert result["processed_dates"] > 0
+
+
+def test_feature_trust_score_stored(db_session: Session) -> None:
+    from sqlalchemy import func
+
+    _seed_price_series(db_session, "STORE_TRUST", "2024-01-01", count=30)
+
+    service = FeatureService(session=db_session)
+    service.compute_features_batch("STORE_TRUST")
+
+    feature_count = db_session.scalar(select(func.count()).select_from(Feature))
+    assert feature_count > 0

@@ -1,4 +1,4 @@
-"""add_data_quality_tables
+﻿"""add_data_quality_tables
 
 Revision ID: 0004_add_data_quality_tables
 Revises: 0003_update_ingestion_logs_add_source_id_and_duration
@@ -63,15 +63,29 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("report_date", name="uq_data_quality_reports_report_date"),
     )
-    op.create_index(
-        "ix_data_trust_stock_id_date",
-        "data_trust",
-        ["stock_id", "date"],
-        unique=False,
+    op.create_table(
+        "data_quality_alerts",
+        sa.Column("id", sa.Integer(), nullable=False),
+        sa.Column("report_id", sa.Integer(), nullable=False),
+        sa.Column("symbol", sa.String(length=20), nullable=False),
+        sa.Column("date", sa.Date(), nullable=False),
+        sa.Column("severity", sa.String(length=20), nullable=False),
+        sa.Column("message", sa.Text(), nullable=False),
+        sa.Column("details", sa.Text(), nullable=True),
+        sa.Column("acknowledged", sa.Boolean(), nullable=False, server_default=sa.text("false")),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.CheckConstraint("severity IN ('critical', 'warning', 'info')", name="ck_alert_severity"),
+        sa.PrimaryKeyConstraint("id"),
     )
+    op.create_index("ix_data_trust_stock_id_date", "data_trust", ["stock_id", "date"], unique=False)
+    op.create_index("ix_alerts_report_id", "data_quality_alerts", ["report_id"])
+    op.create_index("ix_alerts_symbol_date", "data_quality_alerts", ["symbol", "date"])
 
 
 def downgrade() -> None:
+    op.drop_index("ix_alerts_symbol_date", table_name="data_quality_alerts")
+    op.drop_index("ix_alerts_report_id", table_name="data_quality_alerts")
+    op.drop_table("data_quality_alerts")
     op.drop_index("ix_data_trust_stock_id_date", table_name="data_trust")
     op.drop_table("data_quality_reports")
     op.drop_table("data_trust")

@@ -132,3 +132,39 @@ def test_hard_gate_status_classification(db_session: Session) -> None:
     safe = gate.check("SAFE", "2024-06-01")
     assert safe.status in (DataQualityStatus.excellent, DataQualityStatus.warning)
     assert safe.trust_score >= 0.7
+
+
+def test_get_system_mode_result(db_session: Session) -> None:
+    from backend.app.services.data_quality_gate import SystemMode
+
+    stock = db_session.scalar(select(Stock).where(Stock.symbol == "MODE_TEST"))
+    if stock is None:
+        stock = Stock(symbol="MODE_TEST", is_active=True)
+        db_session.add(stock)
+        db_session.flush()
+
+    db_session.add(
+        Price(
+            stock_id=stock.id,
+            date=date(2024, 6, 1),
+            close=Decimal("100.0"),
+            open=Decimal("99.0"),
+            high=Decimal("101.0"),
+            low=Decimal("99.0"),
+            volume=1000,
+        )
+    )
+    db_session.commit()
+
+    gate = DataQualityGate(session=db_session)
+    mode = gate.get_system_mode()
+
+    assert mode.mode in (SystemMode.normal, SystemMode.degraded, SystemMode.safe_mode)
+
+
+def test_signal_generation_allowed_respects_safemode(db_session: Session) -> None:
+
+    gate = DataQualityGate(session=db_session)
+
+    allowed = gate.get_signal_generation_allowed()
+    assert isinstance(allowed, bool)

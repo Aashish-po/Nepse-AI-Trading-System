@@ -21,6 +21,7 @@ class DataSource(Base):
     type: Mapped[str] = mapped_column(String(20), nullable=False, default="api")
     priority: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    accuracy_score: Mapped[float] = mapped_column(Float, default=1.0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=sa.func.now(), nullable=False
     )

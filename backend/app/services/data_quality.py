@@ -1,16 +1,22 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import math
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from backend.app.db.session import SessionLocal
-from backend.app.models.data_quality import DataQualityReport, DataTrust, HolidayCalendar
-from backend.app.models.data_source import IngestionLog
+from backend.app.models.data_quality import (
+    DataQualityAlert,
+    DataQualityReport,
+    DataTrust,
+    HolidayCalendar,
+    SystemModeHistory,
+)
+from backend.app.models.data_source import DataSource, IngestionLog
 from backend.app.models.price import Price
 from backend.app.models.stock import Stock
 
@@ -76,6 +82,10 @@ class DataQualityService:
             session.add(trust)
             session.commit()
 
+            self._generate_alerts(
+                session, stock.id, price.date, trust_score, details, report_id=None
+            )
+
             return {
                 "trust_score": trust_score,
                 "status": status,
@@ -85,6 +95,81 @@ class DataQualityService:
             }
         finally:
             if owns_session and session is not self._session:
+                session.close()
+
+    def evaluate_symbols_bulk(
+        self, symbols: list[str], date_str: str
+    ) -> list[dict[str, Any]]:
+        session = self._get_session()
+        owns_session = self._session is None
+        results = []
+        try:
+            stocks = session.scalars(
+                sa.select(Stock).where(Stock.symbol.in_([s.upper() for s in symbols]))
+            ).all()
+            stock_map = {s.symbol: s for s in stocks}
+
+            for symbol in symbols:
+                stock = stock_map.get(symbol.upper())
+                if stock is None:
+                    results.append({
+                        "symbol": symbol.upper(),
+                        "trust_score": 0.0,
+                        "status": "unsafe",
+                        "safe": False,
+                        "reason": "stock_not_found",
+                        "components": {},
+                    })
+                    continue
+
+                price = session.scalar(
+                    sa.select(Price).where(
+                        Price.stock_id == stock.id,
+                        Price.date == date_str,
+                    )
+                )
+                if price is None:
+                    results.append({
+                        "symbol": symbol.upper(),
+                        "trust_score": 0.0,
+                        "status": "unsafe",
+                        "safe": False,
+                        "reason": "no_price_data",
+                        "components": {},
+                    })
+                    continue
+
+                trust_score, details, components = self._compute_trust_score(
+                    session, stock.id, price
+                )
+                status = self._classify_status(trust_score)
+                is_safe = trust_score >= 0.7
+
+                trust = DataTrust(
+                    stock_id=stock.id,
+                    date=price.date,
+                    trust_score=trust_score,
+                    completeness_score=details.get("completeness_score"),
+                    volume_anomaly_detected=details.get("volume_anomaly"),
+                    missing_dates_count=details.get("missing_dates_count"),
+                    rejected_count=details.get("rejected_count"),
+                    details=json.dumps(details),
+                )
+                session.add(trust)
+
+                results.append({
+                    "symbol": symbol.upper(),
+                    "trust_score": trust_score,
+                    "status": status,
+                    "safe": is_safe,
+                    "details": details,
+                    "components": components,
+                })
+
+            session.commit()
+            return results
+        finally:
+            if owns_session:
                 session.close()
 
     def generate_daily_report(self, report_date: str | None = None) -> dict[str, Any]:
@@ -143,6 +228,7 @@ class DataQualityService:
             session.commit()
 
             return {
+                "report_id": report.id,
                 "report_date": target_date.isoformat(),
                 "total_symbols": total_symbols,
                 "symbols_passed": passed,
@@ -155,6 +241,547 @@ class DataQualityService:
         finally:
             if owns_session:
                 session.close()
+
+    def get_symbol_trust_trend(
+        self, symbol: str, window: int = 30
+    ) -> dict[str, Any]:
+        session = self._get_session()
+        owns_session = self._session is None
+        try:
+            stock = session.scalar(sa.select(Stock).where(Stock.symbol == symbol.upper()))
+            if stock is None:
+                return {"symbol": symbol.upper(), "trend": None}
+
+            records = list(
+                session.scalars(
+                    sa.select(DataTrust)
+                    .where(DataTrust.stock_id == stock.id)
+                    .order_by(DataTrust.date.desc())
+                    .limit(window)
+                ).all()
+            )
+
+            if not records:
+                return {"symbol": symbol.upper(), "trend": None}
+
+            scores = [r.trust_score for r in records]
+            recent_7 = scores[:7] if len(scores) >= 7 else scores
+            avg_7d = sum(recent_7) / len(recent_7) if recent_7 else 0.0
+            unsafe_pct = sum(1 for s in scores if s < 0.7) / len(scores)
+            std_dev = self._std_dev(scores)
+
+            return {
+                "symbol": symbol.upper(),
+                "trend": {
+                    "avg_7d": avg_7d,
+                    "avg_30d": sum(scores) / len(scores),
+                    "stability": std_dev,
+                    "unsafe_pct": unsafe_pct,
+                    "total_days": len(scores),
+                },
+            }
+        finally:
+            if owns_session:
+                session.close()
+
+    def _std_dev(self, values: list[float]) -> float:
+        if len(values) < 2:
+            return 0.0
+        mean = sum(values) / len(values)
+        variance = sum((v - mean) ** 2 for v in values) / len(values)
+        return math.sqrt(variance)
+
+    def check_data_freshness(
+        self, symbol: str, target_date: str, expected_hours: float = 16.0
+    ) -> dict[str, Any]:
+        session = self._get_session()
+        owns_session = self._session is None
+        try:
+            stock = session.scalar(sa.select(Stock).where(Stock.symbol == symbol.upper()))
+            if stock is None:
+                return {"symbol": symbol.upper(), "fresh": False, "reason": "stock_not_found"}
+
+            latest_price = session.scalar(
+                sa.select(Price)
+                .where(Price.stock_id == stock.id)
+                .order_by(Price.date.desc())
+                .limit(1)
+            )
+
+            if latest_price is None:
+                return {"symbol": symbol.upper(), "fresh": False, "reason": "no_data"}
+
+            target = datetime.strptime(target_date, "%Y-%m-%d").date()
+            if latest_price.date < target:
+                return {
+                    "symbol": symbol.upper(),
+                    "fresh": False,
+                    "reason": "DATA_DELAY",
+                    "last_update": latest_price.date.isoformat(),
+                    "expected_date": target_date,
+                }
+
+            return {
+                "symbol": symbol.upper(),
+                "fresh": True,
+                "last_update": latest_price.date.isoformat(),
+            }
+        finally:
+            if owns_session:
+                session.close()
+
+    def cross_validate_sources(
+        self, symbol: str, date_str: str, price_field: str = "close"
+    ) -> dict[str, Any]:
+        session = self._get_session()
+        owns_session = self._session is None
+        try:
+            stock = session.scalar(sa.select(Stock).where(Stock.symbol == symbol.upper()))
+            if stock is None:
+                return {"symbol": symbol.upper(), "match": False, "reason": "stock_not_found"}
+
+            price = session.scalar(
+                sa.select(Price).where(
+                    Price.stock_id == stock.id,
+                    Price.date == datetime.strptime(date_str, "%Y-%m-%d").date(),
+                )
+            )
+            if price is None:
+                return {"symbol": symbol.upper(), "match": False, "reason": "no_price_data"}
+
+            sources = list(session.scalars(sa.select(DataSource)).all())
+            if len(sources) < 2:
+                return {"symbol": symbol.upper(), "match": True, "reason": "single_source"}
+
+            values_by_source: dict[str, float] = {}
+            for source in sources:
+                log = session.scalar(
+                    sa.select(IngestionLog)
+                    .where(IngestionLog.source_id == source.id)
+                    .order_by(IngestionLog.completed_at.desc())
+                    .limit(1)
+                )
+                if log and log.errors:
+                    try:
+                        payload = json.loads(log.errors)
+                        samples = payload.get("sample_rejected", [])
+                        for sample in samples:
+                            if sample.get("date") == date_str and sample.get("symbol") == symbol.upper():
+                                val = sample.get(price_field)
+                                if val is not None:
+                                    values_by_source[source.name] = float(val)
+                    except (json.JSONDecodeError, ValueError, TypeError):
+                        pass
+
+            if len(values_by_source) < 2:
+                return {
+                    "symbol": symbol.upper(),
+                    "match": True,
+                    "reason": "insufficient_data",
+                    "note": "Only one source has data for this date",
+                }
+
+            vals = list(values_by_source.values())
+            current_val = float(getattr(price, price_field) or 0)
+            if current_val == 0:
+                return {
+                    "symbol": symbol.upper(),
+                    "match": False,
+                    "reason": "no_current_value",
+                }
+
+            if all(abs(v - current_val) / current_val < 0.05 for v in vals):
+                return {
+                    "symbol": symbol.upper(),
+                    "match": True,
+                    "field": price_field,
+                    "value": current_val,
+                    "sources_checked": list(values_by_source.keys()),
+                    "max_deviation_pct": max(abs(v - current_val) / current_val for v in vals) * 100,
+                }
+
+            return {
+                "symbol": symbol.upper(),
+                "match": False,
+                "field": price_field,
+                "value": current_val,
+                "sources_checked": list(values_by_source.keys()),
+                "discrepancies": {k: v for k, v in values_by_source.items() if abs(v - current_val) / current_val >= 0.05},
+            }
+        finally:
+            if owns_session:
+                session.close()
+
+    def get_alerts(
+        self, report_id: int | None = None, acknowledged: bool = False
+    ) -> list[dict[str, Any]]:
+        session = self._get_session()
+        owns_session = self._session is None
+        try:
+            query = sa.select(DataQualityAlert)
+            if report_id is not None:
+                query = query.where(DataQualityAlert.report_id == report_id)
+            if acknowledged:
+                query = query.where(DataQualityAlert.acknowledged.is_(True))
+            alerts = session.scalars(
+                query.order_by(DataQualityAlert.created_at.desc())
+            ).all()
+            return [
+                {
+                    "id": a.id,
+                    "report_id": a.report_id,
+                    "symbol": a.symbol,
+                    "date": a.date.isoformat(),
+                    "severity": a.severity,
+                    "message": a.message,
+                    "acknowledged": a.acknowledged,
+                    "created_at": a.created_at.isoformat(),
+                }
+                for a in alerts
+            ]
+        finally:
+            if owns_session:
+                session.close()
+
+    def acknowledge_alert(self, alert_id: int) -> bool:
+        session = self._get_session()
+        owns_session = self._session is None
+        try:
+            alert = session.get(DataQualityAlert, alert_id)
+            if alert is None:
+                return False
+            alert.acknowledged = True
+            session.commit()
+            return True
+        finally:
+            if owns_session:
+                session.close()
+
+    def get_system_mode(self) -> dict[str, Any]:
+        session = self._get_session()
+        owns_session = self._session is None
+        try:
+            stocks = list(session.scalars(sa.select(Stock)).all())
+            if not stocks:
+                mode_result = {
+                    "mode": "SAFE_MODE",
+                    "reason": "no_symbols",
+                    "unsafe_ratio": 0.0,
+                }
+                self._persist_system_mode(session, mode_result)
+                return mode_result
+
+            unsafe_count = 0
+            for stock in stocks:
+                trust = session.scalar(
+                    sa.select(DataTrust)
+                    .where(DataTrust.stock_id == stock.id)
+                    .order_by(DataTrust.date.desc())
+                    .limit(1)
+                )
+                if trust is None or trust.trust_score < 0.7:
+                    unsafe_count += 1
+
+            unsafe_ratio = unsafe_count / len(stocks)
+
+            if unsafe_ratio >= 0.5:
+                mode = "SAFE_MODE"
+            elif unsafe_ratio >= 0.2:
+                mode = "DEGRADED"
+            else:
+                mode = "NORMAL"
+
+            mode_result = {
+                "mode": mode,
+                "total_symbols": len(stocks),
+                "unsafe_count": unsafe_count,
+                "unsafe_ratio": unsafe_ratio,
+            }
+            self._persist_system_mode(session, mode_result)
+            return mode_result
+        finally:
+            if owns_session:
+                session.close()
+
+    def _persist_system_mode(
+        self, session: Session, mode_result: dict[str, Any]
+    ) -> None:
+        history = SystemModeHistory(
+            timestamp=datetime.now(UTC),
+            mode=mode_result["mode"],
+            unsafe_ratio=mode_result["unsafe_ratio"],
+            total_symbols=mode_result.get("total_symbols", 0),
+        )
+        session.add(history)
+        session.commit()
+
+    def get_source_accuracy_score(self, source_id: int) -> float:
+        session = self._get_session()
+        owns_session = self._session is None
+        try:
+            logs = list(
+                session.scalars(
+                    sa.select(IngestionLog)
+                    .where(IngestionLog.source_id == source_id)
+                    .order_by(IngestionLog.completed_at.desc())
+                    .limit(100)
+                ).all()
+            )
+            if not logs:
+                return 1.0
+
+            success_count = sum(1 for log in logs if log.status == "success")
+            success_rate = success_count / len(logs)
+            avg_rejected = sum(log.records_rejected for log in logs) / len(logs)
+            rejection_penalty = min(0.3, avg_rejected / 100.0)
+            return max(0.0, success_rate - rejection_penalty)
+        finally:
+            if owns_session:
+                session.close()
+
+    def calculate_weighted_price(
+        self, symbol: str, date_str: str, price_field: str = "close"
+    ) -> float | None:
+        session = self._get_session()
+        owns_session = self._session is None
+        try:
+            stock = session.scalar(sa.select(Stock).where(Stock.symbol == symbol.upper()))
+            if stock is None:
+                return None
+
+            price = session.scalar(
+                sa.select(Price).where(
+                    Price.stock_id == stock.id,
+                    Price.date == datetime.strptime(date_str, "%Y-%m-%d").date(),
+                )
+            )
+            if price is None:
+                return None
+
+            sources = list(
+                session.scalars(
+                    sa.select(DataSource).where(DataSource.is_active.is_(True))
+                ).all()
+            )
+            if not sources:
+                return float(getattr(price, price_field) or 0)
+
+            values_with_weights: list[tuple[float, float]] = []
+            for source in sources:
+                accuracy = source.accuracy_score if source.accuracy_score else 1.0
+                if accuracy < 0.3:
+                    continue
+                val = getattr(price, price_field, None)
+                if val is not None:
+                    values_with_weights.append((float(val), accuracy))
+
+            if not values_with_weights:
+                return None
+
+            weighted_sum = sum(v * w for v, w in values_with_weights)
+            total_weight = sum(w for _, w in values_with_weights)
+            return weighted_sum / total_weight if total_weight > 0 else None
+        finally:
+            if owns_session:
+                session.close()
+
+    def detect_source_drift(self, source_id: int, window: int = 10) -> dict[str, Any]:
+        session = self._get_session()
+        owns_session = self._session is None
+        try:
+            logs = list(
+                session.scalars(
+                    sa.select(IngestionLog)
+                    .where(
+                        IngestionLog.source_id == source_id,
+                        IngestionLog.status == "success",
+                    )
+                    .order_by(IngestionLog.completed_at.desc())
+                    .limit(200)
+                ).all()
+            )
+            if len(logs) < window * 2:
+                return {
+                    "source_id": source_id,
+                    "drift_detected": False,
+                    "reason": "insufficient_data",
+                    "current_stats": {"records_inserted_avg": 0},
+                }
+
+            recent = logs[:window]
+            historical = logs[window : window * 2]
+
+            current_avg = sum(log.records_inserted for log in recent) / len(recent)
+            historical_avg = sum(log.records_inserted for log in historical) / len(historical)
+
+            if historical_avg == 0:
+                drift = current_avg > 0 and current_avg < 50
+            else:
+                drift = current_avg < historical_avg * 0.7
+
+            return {
+                "source_id": source_id,
+                "drift_detected": drift,
+                "current_stats": {
+                    "records_inserted_avg": current_avg,
+                    "records_fetched_avg": sum(log.records_fetched for log in recent) / len(recent),
+                },
+                "historical_stats": {
+                    "records_inserted_avg": historical_avg,
+                },
+                "ratio": current_avg / historical_avg if historical_avg > 0 else 0,
+            }
+        finally:
+            if owns_session:
+                session.close()
+
+    def recover_blacklisted_sources(self, recovery_threshold: float = 0.5) -> list[dict[str, Any]]:
+        session = self._get_session()
+        owns_session = self._session is None
+        recovered = []
+        try:
+            sources = list(
+                session.scalars(
+                    sa.select(DataSource).where(
+                        DataSource.is_active.is_(False),
+                        DataSource.accuracy_score < 0.3,
+                    )
+                ).all()
+            )
+
+            for source in sources:
+                accuracy = self.get_source_accuracy_score(source.id)
+                if accuracy >= recovery_threshold:
+                    source.is_active = True
+                    source.accuracy_score = accuracy
+                    session.add(source)
+                    recovered.append({
+                        "source_id": source.id,
+                        "name": source.name,
+                        "accuracy_score": accuracy,
+                        "recovered": True,
+                    })
+
+            session.commit()
+            return recovered
+        finally:
+            if owns_session:
+                session.close()
+
+    def apply_trust_decay(self, days_threshold: int = 30, decay_factor: float = 0.95) -> int:
+        session = self._get_session()
+        owns_session = self._session is None
+        decayed_count = 0
+        try:
+            threshold_date = datetime.now(UTC).date() - timedelta(days=days_threshold)
+            old_trusts = list(
+                session.scalars(
+                    sa.select(DataTrust).where(DataTrust.date <= threshold_date)
+                ).all()
+            )
+
+            for trust in old_trusts:
+                new_score = max(0.0, trust.trust_score * decay_factor)
+                if new_score != trust.trust_score:
+                    trust.trust_score = new_score
+                    session.add(trust)
+                    decayed_count += 1
+
+            session.commit()
+            return decayed_count
+        finally:
+            if owns_session:
+                session.close()
+
+    def _generate_alerts(
+        self,
+        session: Session,
+        stock_id: int,
+        date: date,
+        trust_score: float,
+        details: dict[str, Any],
+        report_id: int | None,
+    ) -> None:
+        symbol = session.scalar(sa.select(Stock).where(Stock.id == stock_id))
+        if symbol is None:
+            return
+
+        if trust_score < 0.7:
+            severity = "critical" if trust_score < 0.3 else "warning"
+            self._create_alert(
+                session,
+                report_id,
+                symbol.symbol,
+                date,
+                severity,
+                f"Low trust score: {trust_score:.2f}",
+                metadata={"type": "TRUST_SCORE_LOW", "value": trust_score},
+            )
+
+        if details.get("volume_anomaly"):
+            volume = details.get("volume_actual", 0)
+            volume_mean = details.get("volume_mean", 0)
+            z_score = details.get("volume_z_score", 0)
+            self._create_alert(
+                session,
+                report_id,
+                symbol.symbol,
+                date,
+                "warning",
+                "Volume anomaly detected",
+                metadata={
+                    "type": "VOLUME_ANOMALY",
+                    "actual": volume,
+                    "expected_mean": volume_mean,
+                    "z_score": z_score,
+                },
+            )
+
+        if (details.get("missing_dates_count", 0) or 0) > 3:
+            missing = details.get("missing_dates_count", 0)
+            self._create_alert(
+                session,
+                report_id,
+                symbol.symbol,
+                date,
+                "warning",
+                f"Missing {missing} trading days detected",
+                metadata={"type": "MISSING_DAYS", "count": missing},
+            )
+
+        if (details.get("rejected_count", 0) or 0) > 0:
+            rejected = details.get("rejected_count", 0)
+            self._create_alert(
+                session,
+                report_id,
+                symbol.symbol,
+                date,
+                "info",
+                f"{rejected} records rejected during ingestion",
+                metadata={"type": "REJECTED_RECORDS", "count": rejected},
+            )
+
+    def _create_alert(
+        self,
+        session: Session,
+        report_id: int | None,
+        symbol: str,
+        date: date,
+        severity: str,
+        message: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        alert = DataQualityAlert(
+            report_id=report_id or 0,
+            symbol=symbol,
+            date=date,
+            severity=severity,
+            message=message,
+            details=json.dumps(metadata) if metadata else None,
+            created_at=datetime.now(UTC),
+        )
+        session.add(alert)
+        session.flush()
 
     def is_data_safe(self, symbol: str, date_str: str, threshold: float = 0.7) -> bool:
         result = self.evaluate_symbol_date(symbol, date_str)
@@ -178,9 +805,7 @@ class DataQualityService:
                 }
 
             records = list(
-                session.scalars(
-                    sa.select(DataTrust).where(DataTrust.stock_id == stock.id)
-                ).all()
+                session.scalars(sa.select(DataTrust).where(DataTrust.stock_id == stock.id)).all()
             )
             if not records:
                 return {
@@ -245,8 +870,13 @@ class DataQualityService:
             trust -= 0.1
             components["completeness_penalty"] = -0.1
 
-        volume_anomaly = self._detect_volume_anomaly(session, stock_id, price)
+        volume_anomaly, volume_actual, volume_mean, volume_z = self._detect_volume_anomaly_detailed(
+            session, stock_id, price
+        )
         details["volume_anomaly"] = volume_anomaly
+        details["volume_actual"] = volume_actual
+        details["volume_mean"] = volume_mean
+        details["volume_z_score"] = volume_z
         volume_score = 0.8 if volume_anomaly else 1.0
         components["volume_score"] = volume_score
         if volume_anomaly:
@@ -300,20 +930,30 @@ class DataQualityService:
         present = sum(1 for f in fields if getattr(price, f, None) is not None)
         return present / len(fields)
 
-    def _detect_volume_anomaly(self, session: Session, stock_id: int, price: Any) -> bool:
+    def _detect_volume_anomaly_detailed(
+        self, session: Session, stock_id: int, price: Any
+    ) -> tuple[bool, int, float, float]:
         if price.volume is None or price.volume <= 0:
-            return False
+            return False, 0, 0.0, 0.0
         volumes = self._get_recent_volumes(session, stock_id, price.date, window=20)
         if len(volumes) < 5:
-            return False
+            return False, int(price.volume), 0.0, 0.0
         mean = sum(volumes) / len(volumes)
         if mean <= 0:
-            return False
+            return False, int(price.volume), 0.0, 0.0
         variance = sum((v - mean) ** 2 for v in volumes) / len(volumes)
         std = math.sqrt(variance)
         if std == 0:
-            return abs(price.volume - mean) / mean > 0.5
-        return abs(price.volume - mean) > 3 * std
+            is_anomaly = abs(price.volume - mean) / mean > 0.5
+            z_score = abs(price.volume - mean) / mean if mean > 0 else 0.0
+            return is_anomaly, int(price.volume), mean, z_score
+        z_score = abs(price.volume - mean) / std if std > 0 else 0.0
+        is_anomaly = z_score > 3
+        return is_anomaly, int(price.volume), mean, z_score
+
+    def _detect_volume_anomaly(self, session: Session, stock_id: int, price: Any) -> bool:
+        is_anomaly, _, _, _ = self._detect_volume_anomaly_detailed(session, stock_id, price)
+        return is_anomaly
 
     def _get_recent_volumes(
         self, session: Session, stock_id: int, before_date: Any, window: int = 20
