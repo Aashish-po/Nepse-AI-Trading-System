@@ -1,9 +1,9 @@
-from datetime import date, datetime
+﻿from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.models.data_quality import HolidayCalendar
+from backend.app.models.data_quality import DataTrust, HolidayCalendar
 from backend.app.models.price import Price
 from backend.app.models.stock import Stock
 from backend.app.services.data_quality import DataQualityService
@@ -11,7 +11,7 @@ from backend.app.services.data_quality import DataQualityService
 
 def _seed_price(
     db: Session,
-    symbol: str,
+    symbol: str,        
     price_date: str,
     close: float = 100.0,
     volume: int = 1000,
@@ -104,11 +104,11 @@ def test_holiday_reduces_trust(db_session: Session) -> None:
 
 
 def test_missing_dates_detected(db_session: Session) -> None:
-    _seed_price(db_session, "NLIC", "2024-06-01", close=100.0, volume=1000)
-    _seed_price(db_session, "NLIC", "2024-06-03", close=102.0, volume=1000)
+    _seed_price(db_session, "NLIC", "2026-06-01", close=100.0, volume=1000)
+    _seed_price(db_session, "NLIC", "2026-06-03", close=102.0, volume=1000)
 
     service = DataQualityService(session=db_session)
-    result = service.evaluate_symbol_date("NLIC", "2024-06-03")
+    result = service.evaluate_symbol_date("NLIC", "2026-06-03")
 
     assert result["details"]["missing_dates_count"] >= 1
     assert result["components"]["missing_penalty"] < 0
@@ -133,14 +133,14 @@ def test_is_data_safe_threshold(db_session: Session) -> None:
 
 
 def test_symbol_quality_summary(db_session: Session) -> None:
-    _seed_price(db_session, "NABIL", "2024-06-01", close=100.0, volume=1000)
-    _seed_price(db_session, "NABIL", "2024-06-02", close=101.0, volume=1000)
-    _seed_price(db_session, "NABIL", "2024-06-03", close=102.0, volume=1000)
+    _seed_price(db_session, "NABIL", "2026-06-01", close=100.0, volume=1000)
+    _seed_price(db_session, "NABIL", "2026-06-02", close=101.0, volume=1000)
+    _seed_price(db_session, "NABIL", "2026-06-03", close=102.0, volume=1000)
 
     service = DataQualityService(session=db_session)
-    service.evaluate_symbol_date("NABIL", "2024-06-01")
-    service.evaluate_symbol_date("NABIL", "2024-06-02")
-    service.evaluate_symbol_date("NABIL", "2024-06-03")
+    service.evaluate_symbol_date("NABIL", "2026-06-01")
+    service.evaluate_symbol_date("NABIL", "2026-06-02")
+    service.evaluate_symbol_date("NABIL", "2026-06-03")
     summary = service.get_symbol_quality_summary("NABIL")
 
     assert summary["symbol"] == "NABIL"
@@ -153,10 +153,10 @@ def test_symbol_quality_summary(db_session: Session) -> None:
 
 
 def test_warning_zone_classification(db_session: Session) -> None:
-    _seed_price(db_session, "TEST", "2024-06-01", close=100.0, volume=1000)
+    _seed_price(db_session, "TEST", "2026-06-01", close=100.0, volume=1000)
 
     service = DataQualityService(session=db_session)
-    result = service.evaluate_symbol_date("TEST", "2024-06-01")
+    result = service.evaluate_symbol_date("TEST", "2026-06-01")
 
     assert result["status"] in ("excellent", "warning", "unsafe")
     if result["trust_score"] >= 0.85:
@@ -199,3 +199,323 @@ def test_is_trading_day_persisted(db_session: Session) -> None:
 
     assert holiday is True
     assert trading_day is False
+
+
+def test_symbol_trust_trend(db_session: Session) -> None:
+    start = date(2024, 5, 1)
+    for i in range(30):
+        price_date = start + timedelta(days=i)
+        _seed_price(
+            db_session, "TREND", price_date.strftime("%Y-%m-%d"), close=100.0, volume=1000
+        )
+
+    service = DataQualityService(session=db_session)
+    for i in range(30):
+        price_date = start + timedelta(days=i)
+        service.evaluate_symbol_date("TREND", price_date.strftime("%Y-%m-%d"))
+
+    trend = service.get_symbol_trust_trend("TREND", window=30)
+
+    assert trend["symbol"] == "TREND"
+    assert trend["trend"] is not None
+    assert "avg_7d" in trend["trend"]
+    assert "avg_30d" in trend["trend"]
+    assert "stability" in trend["trend"]
+    assert "unsafe_pct" in trend["trend"]
+
+
+def test_data_freshness_check(db_session: Session) -> None:
+    _seed_price(db_session, "FRESH", "2026-06-01", close=100.0, volume=1000)
+
+    service = DataQualityService(session=db_session)
+    result = service.check_data_freshness("FRESH", "2026-06-01")
+
+    assert result["symbol"] == "FRESH"
+    assert result["fresh"] is True
+
+
+def test_data_freshness_delay(db_session: Session) -> None:
+    _seed_price(db_session, "DELAYED", "2026-05-15", close=100.0, volume=1000)
+
+    service = DataQualityService(session=db_session)
+    result = service.check_data_freshness("DELAYED", "2026-06-01")
+
+    assert result["symbol"] == "DELAYED"
+    assert result["fresh"] is False
+
+
+def test_bulk_evaluation(db_session: Session) -> None:
+    _seed_price(db_session, "BULK1", "2026-06-01", close=100.0, volume=1000)
+    _seed_price(db_session, "BULK2", "2026-06-01", close=100.0, volume=1000)
+
+    service = DataQualityService(session=db_session)
+    results = service.evaluate_symbols_bulk(["BULK1", "BULK2"], "2026-06-01")
+
+    assert len(results) == 2
+    assert results[0]["symbol"] in ("BULK1", "BULK2")
+
+
+def test_alert_metadata_included(db_session: Session) -> None:
+    _seed_price(db_session, "META", "2024-06-01", close=100.0, volume=1000)
+    _seed_price(db_session, "META", "2024-06-02", close=100.0, volume=1000)
+    _seed_price(db_session, "META", "2024-06-03", close=100.0, volume=1000)
+    _seed_price(db_session, "META", "2024-06-04", close=100.0, volume=1000)
+    _seed_price(db_session, "META", "2024-06-05", close=100.0, volume=1000)
+    _seed_price(db_session, "META", "2024-06-06", close=100.0, volume=1000000)
+
+    service = DataQualityService(session=db_session)
+    result = service.evaluate_symbol_date("META", "2024-06-06")
+
+    assert result["details"]["volume_anomaly"] is True
+    assert "volume_actual" in result["details"]
+    assert "volume_mean" in result["details"]
+    assert "volume_z_score" in result["details"]
+
+
+def test_cross_validate_sources_single_source(db_session: Session) -> None:
+    _seed_price(db_session, "CV1", "2024-06-01", close=100.0, volume=1000)
+
+    service = DataQualityService(session=db_session)
+    result = service.cross_validate_sources("CV1", "2024-06-01")
+
+    assert result["match"] is True
+    assert result["reason"] == "single_source"
+
+
+def test_cross_validate_sources_no_price(db_session: Session) -> None:
+    db_session.add(Stock(symbol="CV2", is_active=True))
+    db_session.commit()
+
+    service = DataQualityService(session=db_session)
+    result = service.cross_validate_sources("CV2", "2024-06-01")
+
+    assert result["match"] is False
+    assert result["reason"] == "no_price_data"
+
+
+def test_cross_validate_sources_missing_symbol(db_session: Session) -> None:
+    service = DataQualityService(session=db_session)
+    result = service.cross_validate_sources("NONEXISTENT", "2024-06-01")
+
+    assert result["match"] is False
+    assert result["reason"] == "stock_not_found"
+
+
+def test_get_system_mode_normal(db_session: Session) -> None:
+    _seed_price(db_session, "MODE1", "2024-06-01", close=100.0, volume=1000)
+
+    service = DataQualityService(session=db_session)
+    service.evaluate_symbol_date("MODE1", "2024-06-01")
+    mode = service.get_system_mode()
+
+    assert mode["mode"] == "NORMAL"
+    assert mode["total_symbols"] >= 1
+    assert mode["unsafe_count"] == 0
+
+
+def test_get_system_mode_degraded(db_session: Session) -> None:
+    db_session.add(Stock(symbol="DEG1", is_active=True))
+    db_session.add(Stock(symbol="DEG2", is_active=True))
+    db_session.add(Stock(symbol="DEG3", is_active=True))
+    db_session.commit()
+
+    _seed_price(db_session, "DEG1", "2024-06-01", close=100.0, volume=1000)
+    _seed_price(db_session, "DEG2", "2024-06-01", close=100.0, volume=1000)
+
+    service = DataQualityService(session=db_session)
+    service.evaluate_symbol_date("DEG1", "2024-06-01")
+    service.evaluate_symbol_date("DEG2", "2024-06-01")
+
+    mode = service.get_system_mode()
+
+    assert mode["mode"] in ("NORMAL", "DEGRADED", "SAFE_MODE")
+    assert "unsafe_ratio" in mode
+
+
+def test_source_accuracy_score(db_session: Session) -> None:
+    from backend.app.models.data_source import DataSource, IngestionLog
+
+    source = DataSource(name="TEST_SOURCE", type="api", is_active=True)
+    db_session.add(source)
+    db_session.flush()
+
+    for _ in range(8):
+        log = IngestionLog(
+            source_id=source.id,
+            status="success",
+            records_fetched=100,
+            records_inserted=100,
+            records_rejected=0,
+            started_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
+        )
+        db_session.add(log)
+    for _ in range(2):
+        log = IngestionLog(
+            source_id=source.id,
+            status="failed",
+            records_fetched=100,
+            records_inserted=0,
+            records_rejected=10,
+            started_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
+            errors='{"exception": "test_error"}',
+        )
+        db_session.add(log)
+    db_session.commit()
+
+    service = DataQualityService(session=db_session)
+    score = service.get_source_accuracy_score(source.id)
+
+    assert 0.0 <= score <= 1.0
+
+
+def test_calculate_weighted_price(db_session: Session) -> None:
+    from backend.app.models.data_source import DataSource
+
+    _seed_price(db_session, "WP1", "2024-06-01", close=100.0, volume=1000)
+
+    src1 = DataSource(name="PRIMARY", type="api", is_active=True, accuracy_score=0.95)
+    src2 = DataSource(name="BACKUP", type="api", is_active=True, accuracy_score=0.85)
+    db_session.add(src1)
+    db_session.add(src2)
+    db_session.commit()
+
+    service = DataQualityService(session=db_session)
+    weighted = service.calculate_weighted_price("WP1", "2024-06-01", "close")
+
+    assert weighted is not None
+    assert weighted > 0
+
+
+def test_safe_mode_blocks_feature_generation(db_session: Session) -> None:
+    from backend.app.services.data_quality_gate import DataQualityGate, SystemMode
+
+    db_session.add(Stock(symbol="BLOCKED", is_active=True))
+    db_session.commit()
+
+    _seed_price(db_session, "BLOCKED", "2024-06-01", close=100.0, volume=1000)
+
+    gate = DataQualityGate(session=db_session)
+    service = DataQualityService(session=db_session)
+    for symbol in ["S1", "S2", "S3", "S4", "S5"]:
+        db_session.add(Stock(symbol=symbol, is_active=True))
+    db_session.commit()
+
+    for symbol in ["S1", "S2", "S3", "S4", "S5"]:
+        service.evaluate_symbol_date(symbol, "2024-06-01")
+
+    mode = gate.get_system_mode()
+    if mode.mode == SystemMode.safe_mode:
+        try:
+            gate.assert_safe_for_features("BLOCKED", "2024-06-01")
+            raise AssertionError("Should have raised DataQualityGateError")
+        except Exception:
+            pass
+
+
+def test_system_mode_persists_history(db_session: Session) -> None:
+    from sqlalchemy import func
+
+    from backend.app.models.data_quality import SystemModeHistory
+
+    _seed_price(db_session, "HIST", "2024-06-01", close=100.0, volume=1000)
+
+    service = DataQualityService(session=db_session)
+    service.evaluate_symbol_date("HIST", "2024-06-01")
+    service.get_system_mode()
+
+    count = db_session.scalar(
+        select(func.count()).select_from(SystemModeHistory).where(
+            SystemModeHistory.mode == "NORMAL"
+        )
+    )
+    assert count >= 1
+
+
+def test_source_drift_detection(db_session: Session) -> None:
+    from backend.app.models.data_source import DataSource, IngestionLog
+
+    source = DataSource(name="DRIFT_TEST", type="api", is_active=True)
+    db_session.add(source)
+    db_session.flush()
+
+    for _ in range(20):
+        log = IngestionLog(
+            source_id=source.id,
+            status="success",
+            records_fetched=100,
+            records_inserted=100,
+            records_rejected=0,
+            started_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
+        )
+        db_session.add(log)
+    for _ in range(10):
+        log = IngestionLog(
+            source_id=source.id,
+            status="success",
+            records_fetched=100,
+            records_inserted=30,
+            records_rejected=0,
+            started_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
+        )
+        db_session.add(log)
+    db_session.commit()
+
+    service = DataQualityService(session=db_session)
+    result = service.detect_source_drift(source.id, window=10)
+
+    assert result["source_id"] == source.id
+    assert "drift_detected" in result
+    assert "ratio" in result
+
+
+def test_blacklist_recovery(db_session: Session) -> None:
+    from backend.app.models.data_source import DataSource, IngestionLog
+
+    source = DataSource(name="RECOVERY", type="api", is_active=False, accuracy_score=0.2)
+    db_session.add(source)
+    db_session.flush()
+
+    for _ in range(10):
+        log = IngestionLog(
+            source_id=source.id,
+            status="success",
+            records_fetched=100,
+            records_inserted=100,
+            records_rejected=0,
+            started_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
+        )
+        db_session.add(log)
+    db_session.commit()
+
+    service = DataQualityService(session=db_session)
+    recovered = service.recover_blacklisted_sources(recovery_threshold=0.5)
+
+    assert len(recovered) == 1
+    assert recovered[0]["recovered"] is True
+    assert recovered[0]["source_id"] == source.id
+
+
+def test_trust_decay_applied(db_session: Session) -> None:
+    from datetime import timedelta as td
+
+    _seed_price(db_session, "DECAY", "2024-01-01", close=100.0, volume=1000)
+
+    service = DataQualityService(session=db_session)
+    service.evaluate_symbol_date("DECAY", "2024-01-01")
+
+    stock = db_session.scalar(select(Stock).where(Stock.symbol == "DECAY"))
+    old_trust = db_session.scalar(
+        select(DataTrust).where(DataTrust.stock_id == stock.id)
+    )
+    old_trust.date = datetime.now(UTC).date() - td(days=60)
+    db_session.add(old_trust)
+    db_session.commit()
+
+    count = service.apply_trust_decay(days_threshold=30, decay_factor=0.95)
+
+    assert count >= 1 
