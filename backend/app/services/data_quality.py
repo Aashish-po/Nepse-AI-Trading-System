@@ -1065,16 +1065,7 @@ class DataQualityService:
         session = self._get_session()
         owns_session = self._session is None
         try:
-            query = sa.select(DataSource)
-            if symbols:
-                stocks = session.scalars(
-                    sa.select(Stock).where(Stock.symbol.in_([s.upper() for s in symbols]))
-                ).all()
-                stock_ids = [s.id for s in stocks]
-            else:
-                stock_ids = [s.id for s in session.scalars(sa.select(Stock)).all()]
-
-            sources = session.scalars(query).all()
+            sources = session.scalars(sa.select(DataSource)).all()
             if len(sources) < 2:
                 return []
 
@@ -1082,7 +1073,7 @@ class DataQualityService:
             for i, src_a in enumerate(sources):
                 for src_b in sources[i + 1 :]:
                     correlation = self._compute_source_correlation(
-                        session, src_a.id, src_b.id, stock_ids, window_days
+                        session, src_a.id, src_b.id, symbols, window_days
                     )
                     if correlation >= threshold:
                         correlations.append(
@@ -1104,21 +1095,25 @@ class DataQualityService:
         session: Session,
         source_a_id: int,
         source_b_id: int,
-        stock_ids: list[int],
-        window_days: int,
+        symbols: list[str] | None = None,
+        window_days: int = 30,
     ) -> float:
-        if not stock_ids:
-            return 0.0
-
+        cutoff_date = datetime.now(UTC) - timedelta(days=window_days)
         log_a = session.scalar(
             sa.select(IngestionLog)
-            .where(IngestionLog.source_id == source_a_id)
+            .where(
+                IngestionLog.source_id == source_a_id,
+                IngestionLog.completed_at >= cutoff_date,
+            )
             .order_by(IngestionLog.completed_at.desc())
             .limit(1)
         )
         log_b = session.scalar(
             sa.select(IngestionLog)
-            .where(IngestionLog.source_id == source_b_id)
+            .where(
+                IngestionLog.source_id == source_b_id,
+                IngestionLog.completed_at >= cutoff_date,
+            )
             .order_by(IngestionLog.completed_at.desc())
             .limit(1)
         )
@@ -1138,8 +1133,21 @@ class DataQualityService:
         if not samples_a or not samples_b:
             return 0.0
 
-        dates_a = set(s.get("date") for s in samples_a if s.get("date"))
-        dates_b = set(s.get("date") for s in samples_b if s.get("date"))
+        if symbols:
+            symbol_set = {s.upper() for s in symbols}
+            dates_a = set(
+                s.get("date")
+                for s in samples_a
+                if s.get("date") and s.get("symbol", "").upper() in symbol_set
+            )
+            dates_b = set(
+                s.get("date")
+                for s in samples_b
+                if s.get("date") and s.get("symbol", "").upper() in symbol_set
+            )
+        else:
+            dates_a = set(s.get("date") for s in samples_a if s.get("date"))
+            dates_b = set(s.get("date") for s in samples_b if s.get("date"))
 
         if not dates_a or not dates_b:
             return 0.0
@@ -1228,28 +1236,13 @@ class DataQualityService:
             active = []
             for o in overrides:
                 if o.expires_at is None:
-                    active.append(
-                        {
-                            "event_type": o.event_type,
-                            "date": o.date.isoformat(),
-                            "symbol": o.symbol,
-                            "sensitivity_multiplier": o.sensitivity_multiplier,
-                            "reason": o.reason,
-                        }
-                    )
+                    is_active = True
                 elif o.expires_at.tzinfo is None:
-                    expires_at = o.expires_at.replace(tzinfo=UTC)
-                    if expires_at > now:
-                        active.append(
-                            {
-                                "event_type": o.event_type,
-                                "date": o.date.isoformat(),
-                                "symbol": o.symbol,
-                                "sensitivity_multiplier": o.sensitivity_multiplier,
-                                "reason": o.reason,
-                            }
-                        )
-                elif o.expires_at > now:
+                    is_active = o.expires_at.replace(tzinfo=UTC) > now
+                else:
+                    is_active = o.expires_at > now
+
+                if is_active:
                     active.append(
                         {
                             "event_type": o.event_type,
