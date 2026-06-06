@@ -159,7 +159,7 @@ class FeatureService:
             feature_weights = [r["feature_weight"] for r in gate_results if r["safe"]]
             trust_versions = [r["trust_version"] for r in gate_results if r["safe"]]
             features_df = self._compute_all_features(safe_df)
-            
+
             correlation_penalty = self._apply_correlation_penalty(symbol, sess)
             confidences: list[float | None] = []
             for i, (_, row) in enumerate(features_df.iterrows()):
@@ -172,9 +172,16 @@ class FeatureService:
                     confidences.append(confidence)
                     for k, v in scaled_features.items():
                         features_df.iat[i, features_df.columns.get_loc(k)] = v  # type: ignore[index]
-            
+
             inserted_count = self._bulk_persist_features(
-                features_df, stock.id, trust_scores, trust_versions, feature_weights, confidences, correlation_penalty, session=sess
+                features_df,
+                stock.id,
+                trust_scores,
+                trust_versions,
+                feature_weights,
+                confidences,
+                correlation_penalty,
+                session=sess,
             )
 
             return {
@@ -219,24 +226,30 @@ class FeatureService:
             try:
                 result = gate.check(symbol, d)
                 trust_version = self._get_trust_version_for_date(symbol, d, session)
-                results.append({
-                    "date": d,
-                    "safe": result.safe,
-                    "trust_score": result.trust_score,
-                    "trust_version": trust_version,
-                    "feature_weight": gate.get_feature_weight(symbol, d),
-                })
+                results.append(
+                    {
+                        "date": d,
+                        "safe": result.safe,
+                        "trust_score": result.trust_score,
+                        "trust_version": trust_version,
+                        "feature_weight": gate.get_feature_weight(symbol, d),
+                    }
+                )
             except Exception:
-                results.append({
-                    "date": d,
-                    "safe": False,
-                    "trust_score": None,
-                    "trust_version": None,
-                    "feature_weight": 0.0,
-                })
+                results.append(
+                    {
+                        "date": d,
+                        "safe": False,
+                        "trust_score": None,
+                        "trust_version": None,
+                        "feature_weight": 0.0,
+                    }
+                )
         return results
 
-    def _get_trust_version_for_date(self, symbol: str, date_str: str, session: Session | None = None) -> str:
+    def _get_trust_version_for_date(
+        self, symbol: str, date_str: str, session: Session | None = None
+    ) -> str:
         sess = session or self._get_session()
         owns_session = session is None and self._session is None
         try:
@@ -504,26 +517,50 @@ class FeatureService:
             if feature_row.empty:
                 raise ValueError(f"Could not compute features for {date_str}")
 
-            features = feature_row.iloc[0].drop("date").to_dict()
+            trust_score = None
+            trust_version = "v1"
+            feature_weight = 1.0
+            correlation_penalty = 1.0
+            confidence = None
 
+            try:
+                gate = DataQualityGate(session=session)
+                gate_result = gate.check(symbol, date_str)
+                trust_score = gate_result.trust_score if gate_result.safe else None
+                trust_version = self._get_trust_version_for_date(symbol, date_str, session)
+                feature_weight = gate.get_feature_weight(symbol, date_str)
+                correlation_penalty = self._apply_correlation_penalty(symbol, session)
+            except Exception:
+                pass
+
+            if trust_score is not None and feature_weight > 0:
+                confidence = max(0.0, min(1.0, trust_score * feature_weight * correlation_penalty))
+
+            features = feature_row.iloc[0].drop("date").to_dict()
             clean_features: dict[str, float | None] = {
                 str(k): float(v) if not np.isnan(v) else None for k, v in features.items()
             }
 
-            trust_score = None
-            try:
-                gate_result = self._gate.check(symbol, date_str)
-                trust_score = gate_result.trust_score if gate_result.safe else None
-            except Exception:
-                pass
+            scaled_features, _ = self._apply_trust_scaling(
+                clean_features, trust_score, feature_weight * correlation_penalty
+            )
 
-            self._persist_single_feature(symbol, date_str, clean_features, trust_score)
+            self._persist_single_feature(
+                symbol,
+                date_str,
+                scaled_features,
+                trust_score,
+                trust_version,
+                feature_weight,
+                correlation_penalty,
+                confidence,
+            )
 
             return {
                 "symbol": symbol.upper(),
                 "date": date_str,
                 "feature_version": self._feature_version,
-                "features": clean_features,
+                "features": scaled_features,
             }
         finally:
             if owns_session:
@@ -535,6 +572,10 @@ class FeatureService:
         date_str: str,
         features: dict[str, Any],
         trust_score: float | None = None,
+        trust_version: str | None = None,
+        feature_weight: float | None = None,
+        correlation_penalty: float = 1.0,
+        confidence: float | None = None,
     ) -> None:
         session = self._get_session()
         owns_session = self._session is None
@@ -543,19 +584,22 @@ class FeatureService:
             if stock is None:
                 raise ValueError(f"Stock {symbol} not found")
 
-            trust_version = self._get_trust_version_for_date(symbol, date_str, session)
-            gate = self._gate if session is None else DataQualityGate(session=session)
-            feature_weight = gate.get_feature_weight(symbol, date_str)
-            correlation_penalty = self._apply_correlation_penalty(symbol, session)
+            if trust_version is None:
+                trust_version = self._get_trust_version_for_date(symbol, date_str, session)
+            if feature_weight is None:
+                gate = self._gate if session is None else DataQualityGate(session=session)
+                feature_weight = gate.get_feature_weight(symbol, date_str)
 
-            confidence = None
-            if trust_score is not None and feature_weight > 0:
+            if confidence is None and trust_score is not None and feature_weight > 0:
                 confidence = max(0.0, min(1.0, trust_score * feature_weight * correlation_penalty))
 
             features_meta = {
                 "trust_score": trust_score,
                 "feature_weight": feature_weight,
+                "confidence_raw": confidence,
                 "correlation_penalty": correlation_penalty,
+                "event_override": False,
+                "version": self._feature_version,
                 "scaled_by_trust": trust_score is not None,
                 "event_adjusted": False,
                 "correlation_penalized": correlation_penalty < 1.0,
@@ -600,14 +644,21 @@ class FeatureService:
                 clean_values = {k: float(v) if not np.isnan(v) else None for k, v in values.items()}
 
                 trust = trust_scores[idx] if trust_scores and idx < len(trust_scores) else None
-                trust_ver = trust_versions[idx] if trust_versions and idx < len(trust_versions) else None
-                weight = feature_weights[idx] if feature_weights and idx < len(feature_weights) else None
+                trust_ver = (
+                    trust_versions[idx] if trust_versions and idx < len(trust_versions) else None
+                )
+                weight = (
+                    feature_weights[idx] if feature_weights and idx < len(feature_weights) else None
+                )
                 confidence = confidences[idx] if confidences and idx < len(confidences) else None
-                
+
                 features_meta = {
                     "trust_score": trust,
                     "feature_weight": weight,
+                    "confidence_raw": confidence,
                     "correlation_penalty": correlation_penalty,
+                    "event_override": False,
+                    "version": self._feature_version,
                     "scaled_by_trust": trust is not None,
                     "event_adjusted": False,
                     "correlation_penalized": correlation_penalty < 1.0,
@@ -680,6 +731,72 @@ class FeatureService:
                 "confidence": feature.confidence,
                 "features_meta": feature.features_meta,
                 "features": feature.values,
+            }
+        finally:
+            if owns_session:
+                session.close()
+
+    def get_features_list(
+        self,
+        symbol: str,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        feature_version: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        session = self._get_session()
+        owns_session = self._session is None
+        try:
+            stock = session.scalar(sa.select(Stock).where(Stock.symbol == symbol.upper()))
+            if stock is None:
+                return {"features": [], "total": 0, "limit": limit, "offset": offset}
+
+            query = (
+                sa.select(Feature)
+                .where(Feature.stock_id == stock.id)
+                .order_by(Feature.date.desc())
+                .limit(limit)
+                .offset(offset)
+            )
+            if start_date:
+                query = query.where(Feature.date >= start_date)
+            if end_date:
+                query = query.where(Feature.date <= end_date)
+            if feature_version:
+                query = query.where(Feature.feature_version == feature_version)
+
+            features = session.scalars(query).all()
+            total_query = (
+                sa.select(sa.func.count()).select_from(Feature).where(Feature.stock_id == stock.id)
+            )
+            if start_date:
+                total_query = total_query.where(Feature.date >= start_date)
+            if end_date:
+                total_query = total_query.where(Feature.date <= end_date)
+            if feature_version:
+                total_query = total_query.where(Feature.feature_version == feature_version)
+            total = session.scalar(total_query) or 0
+
+            results = [
+                {
+                    "date": f.date.isoformat(),
+                    "feature_version": f.feature_version,
+                    "trust_score": f.trust_score,
+                    "trust_version": f.trust_version,
+                    "confidence": f.confidence,
+                    "features_meta": f.features_meta,
+                    "features": f.values,
+                }
+                for f in features
+            ]
+
+            return {
+                "symbol": symbol.upper(),
+                "features": results,
+                "total": total,
+                "limit": limit,
+                "offset": offset,
             }
         finally:
             if owns_session:
