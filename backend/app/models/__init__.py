@@ -3,7 +3,9 @@ from backend.app.models.data_quality import (
     DataQualityAlert,
     DataQualityReport,
     DataTrust,
+    EventOverride,
     HolidayCalendar,
+    SourceCorrelation,
     SystemModeHistory,
 )
 from backend.app.models.data_source import DataSource, IngestionLog
@@ -25,6 +27,7 @@ __all__ = [
     "DataTrust",
     "DataSource",
     "Dataset",
+    "EventOverride",
     "Feature",
     "HolidayCalendar",
     "IngestionLog",
@@ -32,6 +35,7 @@ __all__ = [
     "PortfolioSnapshot",
     "Price",
     "Signal",
+    "SourceCorrelation",
     "Stock",
     "Strategy",
     "SystemModeHistory",

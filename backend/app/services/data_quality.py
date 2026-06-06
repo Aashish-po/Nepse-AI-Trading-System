@@ -71,10 +71,12 @@ class DataQualityService:
             status = self._classify_status(trust_score)
             is_safe = trust_score >= 0.7
 
+            trust_version = details.get("trust_version", "v1")
             trust = DataTrust(
                 stock_id=stock.id,
                 date=price.date,
                 trust_score=trust_score,
+                trust_version=trust_version,
                 completeness_score=details.get("completeness_score"),
                 volume_anomaly_detected=details.get("volume_anomaly"),
                 missing_dates_count=details.get("missing_dates_count"),
@@ -149,10 +151,12 @@ class DataQualityService:
                 status = self._classify_status(trust_score)
                 is_safe = trust_score >= 0.7
 
+                trust_version = details.get("trust_version", "v1")
                 trust = DataTrust(
                     stock_id=stock.id,
                     date=price.date,
                     trust_score=trust_score,
+                    trust_version=trust_version,
                     completeness_score=details.get("completeness_score"),
                     volume_anomaly_detected=details.get("volume_anomaly"),
                     missing_dates_count=details.get("missing_dates_count"),
@@ -1025,3 +1029,241 @@ class DataQualityService:
             return sum(1 for s in samples if s.get("date") == date_str)
         except (json.JSONDecodeError, AttributeError):
             return 0
+
+    def compute_trust_score_with_version(
+        self, session: Session, stock_id: int, price: Any, trust_version: str = "v1"
+    ) -> tuple[float, dict[str, Any], dict[str, float]]:
+        if trust_version == "v2":
+            return self._compute_trust_score_v2(session, stock_id, price)
+        if trust_version == "v3":
+            return self._compute_trust_score_v3(session, stock_id, price)
+        return self._compute_trust_score(session, stock_id, price)
+
+    def _compute_trust_score_v2(
+        self, session: Session, stock_id: int, price: Any
+    ) -> tuple[float, dict[str, Any], dict[str, float]]:
+        trust_score, details, components = self._compute_trust_score(session, stock_id, price)
+        details["trust_version"] = "v2"
+        if details.get("volume_anomaly"):
+            trust_score = trust_score * 0.98
+            components["v2_penalty"] = -0.02 * trust_score
+        return trust_score, details, components
+
+    def _compute_trust_score_v3(
+        self, session: Session, stock_id: int, price: Any
+    ) -> tuple[float, dict[str, Any], dict[str, float]]:
+        trust_score, details, components = self._compute_trust_score(session, stock_id, price)
+        details["trust_version"] = "v3"
+        if details.get("volume_anomaly") and details.get("is_holiday"):
+            trust_score = trust_score * 0.95
+            components["v3_holiday_penalty"] = -0.05 * trust_score
+        return trust_score, details, components
+
+    def detect_source_correlations(
+        self, symbols: list[str] | None = None, window_days: int = 30, threshold: float = 0.8
+    ) -> list[dict[str, Any]]:
+        session = self._get_session()
+        owns_session = self._session is None
+        try:
+            query = sa.select(DataSource)
+            if symbols:
+                stocks = session.scalars(
+                    sa.select(Stock).where(Stock.symbol.in_([s.upper() for s in symbols]))
+                ).all()
+                stock_ids = [s.id for s in stocks]
+            else:
+                stock_ids = [s.id for s in session.scalars(sa.select(Stock)).all()]
+
+            sources = session.scalars(query).all()
+            if len(sources) < 2:
+                return []
+
+            correlations = []
+            for i, src_a in enumerate(sources):
+                for src_b in sources[i + 1 :]:
+                    correlation = self._compute_source_correlation(
+                        session, src_a.id, src_b.id, stock_ids, window_days
+                    )
+                    if correlation >= threshold:
+                        correlations.append(
+                            {
+                                "source_a": src_a.name,
+                                "source_b": src_b.name,
+                                "correlation": correlation,
+                            }
+                        )
+                        self._persist_source_correlation(
+                            session, src_a.id, src_b.id, correlation
+                        )
+
+            return correlations
+        finally:
+            if owns_session:
+                session.close()
+
+    def _compute_source_correlation(
+        self,
+        session: Session,
+        source_a_id: int,
+        source_b_id: int,
+        stock_ids: list[int],
+        window_days: int,
+    ) -> float:
+        if not stock_ids:
+            return 0.0
+
+        log_a = session.scalar(
+            sa.select(IngestionLog)
+            .where(IngestionLog.source_id == source_a_id)
+            .order_by(IngestionLog.completed_at.desc())
+            .limit(1)
+        )
+        log_b = session.scalar(
+            sa.select(IngestionLog)
+            .where(IngestionLog.source_id == source_b_id)
+            .order_by(IngestionLog.completed_at.desc())
+            .limit(1)
+        )
+
+        if log_a is None or log_b is None:
+            return 0.0
+
+        try:
+            errors_a = json.loads(log_a.errors or "{}")
+            errors_b = json.loads(log_b.errors or "{}")
+        except (json.JSONDecodeError, TypeError):
+            return 0.0
+
+        samples_a = errors_a.get("sample_rejected", [])
+        samples_b = errors_b.get("sample_rejected", [])
+
+        if not samples_a or not samples_b:
+            return 0.0
+
+        dates_a = set(s.get("date") for s in samples_a if s.get("date"))
+        dates_b = set(s.get("date") for s in samples_b if s.get("date"))
+
+        if not dates_a or not dates_b:
+            return 0.0
+
+        common = len(dates_a & dates_b)
+        union = len(dates_a | dates_b)
+        return common / union if union > 0 else 0.0
+
+    def _persist_source_correlation(
+        self, session: Session, source_a_id: int, source_b_id: int, correlation: float
+    ) -> None:
+        existing = session.scalar(
+            sa.select(SourceCorrelation).where(
+                SourceCorrelation.source_a_id.in_([source_a_id, source_b_id]),
+                SourceCorrelation.source_b_id.in_([source_a_id, source_b_id]),
+            )
+        )
+        if existing:
+            existing.correlation_score = correlation
+            existing.last_sync_detected = datetime.now(UTC)
+            existing.detection_count += 1
+            session.add(existing)
+        else:
+            corr = SourceCorrelation(
+                source_a_id=source_a_id,
+                source_b_id=source_b_id,
+                correlation_score=correlation,
+                last_sync_detected=datetime.now(UTC),
+            )
+            session.add(corr)
+        session.flush()
+
+    def create_event_override(
+        self,
+        event_type: str,
+        date_str: str,
+        sensitivity_multiplier: float,
+        reason: str,
+        symbol: str | None = None,
+        expires_hours: int | None = None,
+    ) -> dict[str, Any]:
+        session = self._get_session()
+        owns_session = self._session is None
+        try:
+            target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+            expires_at = None
+            if expires_hours:
+                expires_at = datetime.now(UTC) + timedelta(hours=expires_hours)
+
+            override = EventOverride(
+                event_type=event_type,
+                date=target_date,
+                symbol=symbol.upper() if symbol else None,
+                sensitivity_multiplier=sensitivity_multiplier,
+                reason=reason,
+                created_at=datetime.now(UTC),
+                expires_at=expires_at,
+            )
+            session.add(override)
+            session.commit()
+
+            return {
+                "id": override.id,
+                "event_type": override.event_type,
+                "date": override.date.isoformat(),
+                "symbol": override.symbol,
+                "sensitivity_multiplier": override.sensitivity_multiplier,
+            }
+        finally:
+            if owns_session:
+                session.close()
+
+    def get_active_event_overrides(
+        self, date_str: str, symbol: str | None = None
+    ) -> list[dict[str, Any]]:
+        session = self._get_session()
+        owns_session = self._session is None
+        try:
+            target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+            query = sa.select(EventOverride).where(EventOverride.date == target_date)
+            if symbol:
+                query = query.where(EventOverride.symbol == symbol.upper())
+            overrides = session.scalars(query).all()
+
+            now = datetime.now(UTC)
+            active = []
+            for o in overrides:
+                if o.expires_at is None or o.expires_at > now:
+                    active.append(
+                        {
+                            "event_type": o.event_type,
+                            "date": o.date.isoformat(),
+                            "symbol": o.symbol,
+                            "sensitivity_multiplier": o.sensitivity_multiplier,
+                            "reason": o.reason,
+                        }
+                    )
+            return active
+        finally:
+            if owns_session:
+                session.close()
+
+    def evaluate_with_event_override(
+        self, symbol: str, date_str: str, session: Session | None = None
+    ) -> dict[str, Any]:
+        owns_session = session is None
+        if owns_session:
+            session = self._get_session()
+        try:
+            overrides = self.get_active_event_overrides(date_str, symbol)
+            multiplier = 1.0
+            for o in overrides:
+                multiplier *= o["sensitivity_multiplier"]
+
+            result = self.evaluate_symbol_date(symbol, date_str, session=session)
+            if overrides:
+                result["event_adjusted"] = True
+                result["original_trust_score"] = result["trust_score"]
+                result["trust_score"] = max(0.0, min(1.0, result["trust_score"] * multiplier))
+                result["sensitivity_multiplier"] = multiplier
+
+            return result
+        finally:
+            if owns_session:
+                session.close()

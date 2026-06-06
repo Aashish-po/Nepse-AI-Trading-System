@@ -516,3 +516,121 @@ def test_trust_decay_applied(db_session: Session) -> None:
     count = service.apply_trust_decay(days_threshold=30, decay_factor=0.95)
 
     assert count >= 1
+
+
+def test_trust_version_persisted(db_session: Session) -> None:
+    _seed_price(db_session, "VER1", "2024-06-01", close=100.0, volume=1000)
+
+    service = DataQualityService(session=db_session)
+    service.evaluate_symbol_date("VER1", "2024-06-01")
+
+    stock = db_session.scalar(select(Stock).where(Stock.symbol == "VER1"))
+    assert stock is not None
+    trust = db_session.scalar(
+        select(DataTrust).where(DataTrust.stock_id == stock.id)
+    )
+    assert trust is not None
+    assert trust.trust_version == "v1"
+
+
+def test_trust_version_v2_calculation(db_session: Session) -> None:
+    _seed_price(db_session, "VER2", "2024-06-01", close=100.0, volume=1000)
+
+    service = DataQualityService(session=db_session)
+    trust_score, details, components = service.compute_trust_score_with_version(
+        db_session,
+        db_session.scalar(select(Stock).where(Stock.symbol == "VER2")).id,
+        db_session.scalar(
+            select(Price).where(
+                Price.stock_id == db_session.scalar(select(Stock).where(Stock.symbol == "VER2")).id,
+                Price.date == date(2024, 6, 1),
+            )
+        ),
+        trust_version="v2",
+    )
+
+    assert details.get("trust_version") == "v2"
+
+
+def test_source_correlation_detection(db_session: Session) -> None:
+    from backend.app.models.data_source import DataSource, IngestionLog
+
+    src1 = DataSource(name="SRC_A", type="api", is_active=True)
+    src2 = DataSource(name="SRC_B", type="api", is_active=True)
+    db_session.add(src1)
+    db_session.add(src2)
+    db_session.flush()
+
+    for _ in range(5):
+        log = IngestionLog(
+            source_id=src1.id,
+            status="failed",
+            records_fetched=100,
+            records_inserted=0,
+            records_rejected=10,
+            started_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
+            errors='{"sample_rejected": [{"date": "2024-06-01", "symbol": "NABIL"}]}',
+        )
+        db_session.add(log)
+
+    for _ in range(5):
+        log = IngestionLog(
+            source_id=src2.id,
+            status="failed",
+            records_fetched=100,
+            records_inserted=0,
+            records_rejected=10,
+            started_at=datetime.now(UTC),
+            completed_at=datetime.now(UTC),
+            errors='{"sample_rejected": [{"date": "2024-06-01", "symbol": "NABIL"}]}',
+        )
+        db_session.add(log)
+
+    db_session.commit()
+
+    _seed_price(db_session, "NABIL", "2024-06-01", close=100.0, volume=1000)
+
+    service = DataQualityService(session=db_session)
+    correlations = service.detect_source_correlations(threshold=0.5)
+
+    assert isinstance(correlations, list)
+
+
+def test_event_override_creation(db_session: Session) -> None:
+    service = DataQualityService(session=db_session)
+    result = service.create_event_override(
+        event_type="CORPORATE_ANNOUNCEMENT",
+        date_str="2024-06-01",
+        sensitivity_multiplier=0.9,
+        reason="Quarterly results announcement",
+    )
+
+    assert result["event_type"] == "CORPORATE_ANNOUNCEMENT"
+    assert result["sensitivity_multiplier"] == 0.9
+
+
+def test_event_override_applied_to_trust_score(db_session: Session) -> None:
+    _seed_price(db_session, "EVT1", "2024-06-01", close=100.0, volume=1000)
+
+    service = DataQualityService(session=db_session)
+    service.create_event_override(
+        event_type="VOLUME_SPIKE",
+        date_str="2024-06-01",
+        sensitivity_multiplier=0.95,
+        reason="Expected high volume",
+        symbol="EVT1",
+    )
+
+    result = service.evaluate_with_event_override("EVT1", "2024-06-01")
+
+    assert result.get("event_adjusted") is True
+    assert "original_trust_score" in result
+    assert result["trust_score"] == result["original_trust_score"] * 0.95
+
+
+def test_event_override_expired(db_session: Session) -> None:
+    service = DataQualityService(session=db_session)
+
+    overrides = service.get_active_event_overrides("2024-06-01")
+    assert isinstance(overrides, list)
