@@ -38,3 +38,18 @@ class MultiStockFeatureResponse(BaseModel):
     total_gated_dates: int
     total_inserted_rows: int
     errors: list[dict[str, str]]
+
+
+class FeatureRetrieveRequest(BaseModel):
+    symbol: str
+    date: str
+    feature_version: str | None = None
+
+
+class FeatureRetrieveResponse(BaseModel):
+    symbol: str
+    date: str
+    feature_version: str
+    trust_score: float | None = None
+    trust_version: str | None = None
+    features: dict[str, float | None] | None = None

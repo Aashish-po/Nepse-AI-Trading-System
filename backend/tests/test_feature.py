@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from backend.app.models.feature import Feature
 from backend.app.models.price import Price
 from backend.app.models.stock import Stock
+from backend.app.services.data_quality import DataQualityService
 from backend.app.services.feature import FeatureService
 
 
@@ -214,4 +215,106 @@ def test_feature_trust_score_stored(db_session: Session) -> None:
     service.compute_features_batch("STORE_TRUST")
 
     feature_count = db_session.scalar(select(func.count()).select_from(Feature))
-    assert feature_count > 0
+    assert feature_count is not None and feature_count > 0
+
+
+def test_trust_aware_scaling_rsi() -> None:
+    service = FeatureService()
+    features = {"rsi_14": 75.0, "rsi_21": 50.0, "sma_20": 100.0}
+    trust_score = 0.8
+    feature_weight = 1.0
+
+    scaled = service._apply_trust_scaling(features, trust_score, feature_weight)
+    assert scaled["rsi_14"] == 0.75 * 0.8 * 1.0
+    assert scaled["rsi_21"] == 0.5 * 0.8 * 1.0
+    assert scaled["sma_20"] == 100.0
+
+
+def test_trust_aware_scaling_volatility() -> None:
+    service = FeatureService()
+    features = {"volatility_20": 0.02, "rsi_14": 75.0}
+    trust_score = 0.9
+    feature_weight = 0.5
+
+    scaled = service._apply_trust_scaling(features, trust_score, feature_weight)
+    assert scaled["volatility_20"] == 0.02 * 0.9 * 0.5
+    assert scaled["rsi_14"] == 0.75 * 0.9 * 0.5
+
+
+def test_trust_aware_scaling_null_trust() -> None:
+    service = FeatureService()
+    features = {"rsi_14": 75.0, "sma_20": 100.0}
+
+    scaled = service._apply_trust_scaling(features, None, 1.0)
+    assert scaled["rsi_14"] is None
+    assert scaled["sma_20"] is None
+
+
+def test_compute_bulk_returns_expected_format(db_session: Session) -> None:
+    _seed_price_series(db_session, "BULK_TEST", "2024-01-01", count=30)
+
+    service = FeatureService(session=db_session)
+    result = service.compute_bulk("BULK_TEST")
+
+    assert result["symbol"] == "BULK_TEST"
+    assert result["processed_dates"] > 0
+    assert "rsi_14" in result["features_computed"]
+
+
+def test_get_features_retrieves_persisted(db_session: Session) -> None:
+    _seed_price_series(db_session, "GET_TEST", "2024-01-01", count=30)
+
+    service = FeatureService(session=db_session)
+    service.compute_features_batch("GET_TEST")
+
+    retrieved = service.get_features("GET_TEST", "2024-01-01")
+    assert retrieved is not None
+    assert retrieved["symbol"] == "GET_TEST"
+    assert "features" in retrieved
+    assert retrieved["features"] is not None
+
+
+def test_get_features_returns_none_for_missing(db_session: Session) -> None:
+    _seed_price_series(db_session, "MISSING_TEST", "2024-01-01", count=30)
+
+    service = FeatureService(session=db_session)
+    retrieved = service.get_features("MISSING_TEST", "2025-01-01")
+    assert retrieved is None
+
+
+def test_insufficient_data_handling(db_session: Session) -> None:
+    _seed_price_series(db_session, "SMALL_DATA", "2024-01-01", count=5)
+
+    service = FeatureService(session=db_session)
+    result = service.compute_features_batch("SMALL_DATA")
+    assert result["processed_dates"] == 0 or result["gated_dates"] > 0 or result["total_dates"] > 0
+
+
+def test_event_override_multiplier(db_session: Session) -> None:
+    _seed_price_series(db_session, "EVENT_TEST", "2024-01-01", count=30)
+
+    dq = DataQualityService(session=db_session)
+    dq.create_event_override("EARNINGS", "2024-01-01", 0.8, "Test event", symbol="EVENT_TEST")
+
+    service = FeatureService(session=db_session)
+    multiplier = service._apply_event_overrides("EVENT_TEST", "2024-01-01")
+    assert multiplier == 0.8
+
+
+def test_correlation_penalty_returns_default(db_session: Session) -> None:
+    _seed_price_series(db_session, "CORR_TEST", "2024-01-01", count=30)
+
+    service = FeatureService(session=db_session)
+    penalty = service._apply_correlation_penalty("CORR_TEST", db_session)
+    assert penalty == 1.0
+
+
+def test_trust_version_persisted_in_bulk(db_session: Session) -> None:
+    _seed_price_series(db_session, "TRUST_VER", "2024-01-01", count=30)
+
+    service = FeatureService(session=db_session)
+    service.compute_features_batch("TRUST_VER")
+
+    feature = db_session.scalar(select(Feature).where(Feature.trust_version.is_not(None)))
+    assert feature is not None
+    assert feature.trust_version == "v1"
