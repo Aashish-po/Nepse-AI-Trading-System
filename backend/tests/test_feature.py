@@ -312,11 +312,45 @@ def test_correlation_penalty_returns_default(db_session: Session) -> None:
 
 
 def test_trust_version_persisted_in_bulk(db_session: Session) -> None:
+
     _seed_price_series(db_session, "TRUST_VER", "2024-01-01", count=30)
 
     service = FeatureService(session=db_session)
     service.compute_features_batch("TRUST_VER")
 
-    feature = db_session.scalar(select(Feature).where(Feature.trust_version.is_not(None)))
+    feature = db_session.scalar(
+        select(Feature).where(
+            Feature.trust_version.is_not(None)
+        )
+    )
     assert feature is not None
     assert feature.trust_version == "v1"
+
+
+def test_confidence_field_bounded(db_session: Session) -> None:
+    _seed_price_series(db_session, "CONF_BOUNDS", "2024-01-01", count=30)
+
+    service = FeatureService(session=db_session)
+    service.compute_features_batch("CONF_BOUNDS")
+
+    feature = db_session.scalar(
+        select(Feature).where(
+            Feature.confidence.is_not(None)
+        )
+    )
+    assert feature is not None
+    assert 0.0 <= feature.confidence <= 1.0
+
+
+def test_features_meta_includes_debug_info(db_session: Session) -> None:
+    _seed_price_series(db_session, "META_DEBUG", "2024-01-01", count=30)
+
+    service = FeatureService(session=db_session)
+    service.compute_features_batch("META_DEBUG")
+
+    feature = db_session.scalar(select(Feature))
+    assert feature is not None
+    assert feature.features_meta is not None
+    assert "trust_score" in feature.features_meta
+    assert "feature_weight" in feature.features_meta
+    assert "correlation_penalty" in feature.features_meta

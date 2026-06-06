@@ -159,7 +159,7 @@ class FeatureService:
             feature_weights = [r["feature_weight"] for r in gate_results if r["safe"]]
             trust_versions = [r["trust_version"] for r in gate_results if r["safe"]]
             features_df = self._compute_all_features(safe_df)
-
+            
             correlation_penalty = self._apply_correlation_penalty(symbol, sess)
             confidences: list[float | None] = []
             for i, (_, row) in enumerate(features_df.iterrows()):
@@ -172,9 +172,9 @@ class FeatureService:
                     confidences.append(confidence)
                     for k, v in scaled_features.items():
                         features_df.iat[i, features_df.columns.get_loc(k)] = v  # type: ignore[index]
-
+            
             inserted_count = self._bulk_persist_features(
-                features_df, stock.id, trust_scores, trust_versions, confidences, session=sess
+                features_df, stock.id, trust_scores, trust_versions, feature_weights, confidences, correlation_penalty, session=sess
             )
 
             return {
@@ -219,30 +219,24 @@ class FeatureService:
             try:
                 result = gate.check(symbol, d)
                 trust_version = self._get_trust_version_for_date(symbol, d, session)
-                results.append(
-                    {
-                        "date": d,
-                        "safe": result.safe,
-                        "trust_score": result.trust_score,
-                        "trust_version": trust_version,
-                        "feature_weight": gate.get_feature_weight(symbol, d),
-                    }
-                )
+                results.append({
+                    "date": d,
+                    "safe": result.safe,
+                    "trust_score": result.trust_score,
+                    "trust_version": trust_version,
+                    "feature_weight": gate.get_feature_weight(symbol, d),
+                })
             except Exception:
-                results.append(
-                    {
-                        "date": d,
-                        "safe": False,
-                        "trust_score": None,
-                        "trust_version": None,
-                        "feature_weight": 0.0,
-                    }
-                )
+                results.append({
+                    "date": d,
+                    "safe": False,
+                    "trust_score": None,
+                    "trust_version": None,
+                    "feature_weight": 0.0,
+                })
         return results
 
-    def _get_trust_version_for_date(
-        self, symbol: str, date_str: str, session: Session | None = None
-    ) -> str:
+    def _get_trust_version_for_date(self, symbol: str, date_str: str, session: Session | None = None) -> str:
         sess = session or self._get_session()
         owns_session = session is None and self._session is None
         try:
@@ -556,9 +550,12 @@ class FeatureService:
 
             confidence = None
             if trust_score is not None and feature_weight > 0:
-                confidence = trust_score * feature_weight * correlation_penalty
+                confidence = max(0.0, min(1.0, trust_score * feature_weight * correlation_penalty))
 
             features_meta = {
+                "trust_score": trust_score,
+                "feature_weight": feature_weight,
+                "correlation_penalty": correlation_penalty,
                 "scaled_by_trust": trust_score is not None,
                 "event_adjusted": False,
                 "correlation_penalized": correlation_penalty < 1.0,
@@ -589,7 +586,9 @@ class FeatureService:
         stock_id: int,
         trust_scores: list[float] | None = None,
         trust_versions: list[str] | None = None,
+        feature_weights: list[float] | None = None,
         confidences: list[float | None] | None = None,
+        correlation_penalty: float = 1.0,
         session: Session | None = None,
     ) -> int:
         sess = session or self._get_session()
@@ -601,18 +600,17 @@ class FeatureService:
                 clean_values = {k: float(v) if not np.isnan(v) else None for k, v in values.items()}
 
                 trust = trust_scores[idx] if trust_scores and idx < len(trust_scores) else None
-                trust_ver = (
-                    trust_versions[idx] if trust_versions and idx < len(trust_versions) else None
-                )
+                trust_ver = trust_versions[idx] if trust_versions and idx < len(trust_versions) else None
+                weight = feature_weights[idx] if feature_weights and idx < len(feature_weights) else None
                 confidence = confidences[idx] if confidences and idx < len(confidences) else None
-
+                
                 features_meta = {
+                    "trust_score": trust,
+                    "feature_weight": weight,
+                    "correlation_penalty": correlation_penalty,
                     "scaled_by_trust": trust is not None,
                     "event_adjusted": False,
-                    "correlation_penalized": confidence is not None
-                    and confidence < trust_scores[idx]
-                    if trust_scores and idx < len(trust_scores)
-                    else False,
+                    "correlation_penalized": correlation_penalty < 1.0,
                 }
 
                 features_to_insert.append(
