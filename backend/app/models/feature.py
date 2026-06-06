@@ -21,4 +21,5 @@ class Feature(Base):
     date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     feature_version: Mapped[str] = mapped_column(String(50), nullable=False)
     trust_score: Mapped[float] = mapped_column(Float, nullable=True)
+    trust_version: Mapped[str] = mapped_column(String(20), nullable=True)
     values: Mapped[dict] = mapped_column(json_dict_type, nullable=False)

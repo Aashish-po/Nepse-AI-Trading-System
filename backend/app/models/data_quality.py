@@ -68,12 +68,8 @@ class EventOverride(Base):
     symbol: Mapped[str] = mapped_column(String(20), nullable=True)
     sensitivity_multiplier: Mapped[float] = mapped_column(Float, nullable=False)
     reason: Mapped[str] = mapped_column(String(255), nullable=False)
-    created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
-    expires_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class DataQualityReport(Base):

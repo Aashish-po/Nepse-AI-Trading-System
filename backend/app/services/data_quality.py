@@ -13,7 +13,9 @@ from backend.app.models.data_quality import (
     DataQualityAlert,
     DataQualityReport,
     DataTrust,
+    EventOverride,
     HolidayCalendar,
+    SourceCorrelation,
     SystemModeHistory,
 )
 from backend.app.models.data_source import DataSource, IngestionLog
