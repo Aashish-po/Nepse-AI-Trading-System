@@ -22,4 +22,3 @@ def authenticate_user(db: Session, email: str, password: str) -> str | None:
     if user is None or not verify_password(password, user.hashed_password):
         return None
     return create_access_token(subject=user.email)
-

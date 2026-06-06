@@ -13,4 +13,3 @@ def health() -> dict[str, str]:
         "version": settings.app_version,
         "scope": "research-only",
     }
-

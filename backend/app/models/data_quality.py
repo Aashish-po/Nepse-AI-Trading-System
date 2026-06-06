@@ -1,4 +1,4 @@
-﻿import datetime
+import datetime
 
 from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, Float, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
@@ -27,11 +27,53 @@ class DataTrust(Base):
     stock_id: Mapped[int] = mapped_column(Integer, nullable=False)
     date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     trust_score: Mapped[float] = mapped_column(Float, nullable=False)
+    trust_version: Mapped[str] = mapped_column(String(20), nullable=False, default="v1")
     completeness_score: Mapped[float] = mapped_column(Float, nullable=True)  # type: ignore[assignment]
     volume_anomaly_detected: Mapped[bool] = mapped_column(Boolean, nullable=True)  # type: ignore[assignment]
     missing_dates_count: Mapped[int] = mapped_column(Integer, nullable=True)  # type: ignore[assignment]
     rejected_count: Mapped[int] = mapped_column(Integer, nullable=True)  # type: ignore[assignment]
     details: Mapped[str] = mapped_column(Text, nullable=True)  # type: ignore[assignment]
+
+
+class SourceCorrelation(Base):
+    __tablename__ = "source_correlations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_a_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_b_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    correlation_score: Mapped[float] = mapped_column(Float, nullable=False)
+    last_sync_detected: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    detection_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
+
+    __table_args__ = (
+        CheckConstraint(
+            "correlation_score >= 0.0 AND correlation_score <= 1.0",
+            name="ck_correlation_score_range",
+        ),
+    )
+
+
+class EventOverride(Base):
+    __tablename__ = "event_overrides"
+
+    __table_args__ = (
+        CheckConstraint("sensitivity_multiplier > 0", name="ck_sensitivity_positive"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    event_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
+    symbol: Mapped[str] = mapped_column(String(20), nullable=True)
+    sensitivity_multiplier: Mapped[float] = mapped_column(Float, nullable=False)
+    reason: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False
+    )
+    expires_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
 
 
 class DataQualityReport(Base):
@@ -47,13 +89,10 @@ class DataQualityReport(Base):
     total_missing_dates: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_volume_anomalies: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     details: Mapped[str] = mapped_column(Text, nullable=True)  # type: ignore[assignment]
-    created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class DataQualityAlert(Base):
-
     __tablename__ = "data_quality_alerts"
 
     __table_args__ = (
@@ -68,24 +107,18 @@ class DataQualityAlert(Base):
     message: Mapped[str] = mapped_column(Text, nullable=False)
     details: Mapped[str] = mapped_column(Text, nullable=True)  # type: ignore[assignment]
     acknowledged: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    created_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class SystemModeHistory(Base):
     __tablename__ = "system_mode_history"
 
     __table_args__ = (
-        CheckConstraint(
-            "mode IN ('NORMAL', 'DEGRADED', 'SAFE_MODE')", name="ck_system_mode"
-        ),
+        CheckConstraint("mode IN ('NORMAL', 'DEGRADED', 'SAFE_MODE')", name="ck_system_mode"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    timestamp: Mapped[datetime.datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    timestamp: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     mode: Mapped[str] = mapped_column(String(20), nullable=False)
     unsafe_ratio: Mapped[float] = mapped_column(Float, nullable=False)
     total_symbols: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

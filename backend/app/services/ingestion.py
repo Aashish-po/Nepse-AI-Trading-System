@@ -186,9 +186,7 @@ class IngestionService:
         rejected: list[dict[str, Any]],
     ) -> None:
         try:
-            dates = sorted(
-                datetime.fromisoformat(r["date"]).date() for r in valid if "date" in r
-            )
+            dates = sorted(datetime.fromisoformat(r["date"]).date() for r in valid if "date" in r)
             missing: list[tuple[str, str]] = []
             for i in range(1, len(dates)):
                 gap = (dates[i] - dates[i - 1]).days

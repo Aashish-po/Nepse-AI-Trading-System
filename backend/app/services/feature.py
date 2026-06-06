@@ -27,7 +27,6 @@ FEATURE_VERSION = "v1.0.0"
 
 
 class FeatureService:
-
     def __init__(
         self,
         gate: DataQualityGate | None = None,
@@ -42,7 +41,6 @@ class FeatureService:
     def _to_array(self, series: pd.Series) -> NDArray[np.float64]:
         """Convert pandas Series to clean NumPy float64 array."""
         return series.to_numpy(dtype=np.float64, copy=False)
-
 
     def _get_session(self) -> Session:
         if self._session is not None:
@@ -146,9 +144,7 @@ class FeatureService:
 
             safe_df = df.iloc[safe_mask].copy()
             if safe_df.empty:
-                raise DataQualityGateError(
-                    f"All dates gated for {symbol}: no safe data to process"
-                )
+                raise DataQualityGateError(f"All dates gated for {symbol}: no safe data to process")
 
             trust_scores = [r["trust_score"] for r in gate_results if r["safe"]]
             features_df = self._compute_all_features(safe_df)
@@ -201,8 +197,6 @@ class FeatureService:
             except Exception:
                 results.append({"date": d, "safe": False, "trust_score": None})
         return results
-
-
 
     def _compute_all_features(self, df: pd.DataFrame) -> pd.DataFrame:
         close = self._to_array(df["close"])
@@ -307,17 +301,13 @@ class FeatureService:
         tr = np.maximum(high - low, np.abs(high - prev_close))
         tr = np.maximum(tr, np.abs(low - prev_close))
 
-        atr = np.asarray(
-            pd.Series(tr).rolling(window=period, min_periods=period).mean().values
-        )
+        atr = np.asarray(pd.Series(tr).rolling(window=period, min_periods=period).mean().values)
 
         return atr
 
     def _compute_sma(self, values: npt.ArrayLike, period: int = 20) -> npt.NDArray[np.float64]:
         values = np.asarray(values, dtype=np.float64)
-        sma = np.asarray(
-            pd.Series(values).rolling(window=period, min_periods=period).mean().values
-        )
+        sma = np.asarray(pd.Series(values).rolling(window=period, min_periods=period).mean().values)
         return sma
 
     def _compute_ema(self, values: npt.ArrayLike, period: int = 20) -> npt.NDArray[np.float64]:
@@ -337,9 +327,7 @@ class FeatureService:
         self, values: npt.ArrayLike, period: int = 20
     ) -> npt.NDArray[np.float64]:
         values = np.asarray(values, dtype=np.float64)
-        return np.asarray(
-            pd.Series(values).rolling(window=period, min_periods=period).std().values
-        )
+        return np.asarray(pd.Series(values).rolling(window=period, min_periods=period).std().values)
 
     def _compute_volume_ratio(
         self,
@@ -411,12 +399,11 @@ class FeatureService:
                 raise ValueError(f"Could not compute features for {date_str}")
 
             features = feature_row.iloc[0].drop("date").to_dict()
-            
+
             clean_features: dict[str, float | None] = {
-                str(k): float(v) if not np.isnan(v) else None
-                for k, v in features.items()
+                str(k): float(v) if not np.isnan(v) else None for k, v in features.items()
             }
-      
+
             trust_score = None
             try:
                 gate_result = self._gate.check(symbol, date_str)

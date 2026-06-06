@@ -11,8 +11,7 @@ class Feature(Base):
     __tablename__ = "features"
     __table_args__ = (
         UniqueConstraint(
-            "stock_id", "date", "feature_version",
-            name="uq_features_stock_date_version"
+            "stock_id", "date", "feature_version", name="uq_features_stock_date_version"
         ),
         Index("ix_features_stock_id_date", "stock_id", "date"),
     )
@@ -23,4 +22,3 @@ class Feature(Base):
     feature_version: Mapped[str] = mapped_column(String(50), nullable=False)
     trust_score: Mapped[float] = mapped_column(Float, nullable=True)
     values: Mapped[dict] = mapped_column(json_dict_type, nullable=False)
-    

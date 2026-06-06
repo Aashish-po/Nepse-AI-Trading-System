@@ -15,4 +15,3 @@ def test_register_and_login(client) -> None:
 
     assert login_response.status_code == 200
     assert login_response.json()["access_token"]
-

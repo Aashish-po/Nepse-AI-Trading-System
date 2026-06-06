@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import json
 import math
@@ -97,9 +97,7 @@ class DataQualityService:
             if owns_session and session is not self._session:
                 session.close()
 
-    def evaluate_symbols_bulk(
-        self, symbols: list[str], date_str: str
-    ) -> list[dict[str, Any]]:
+    def evaluate_symbols_bulk(self, symbols: list[str], date_str: str) -> list[dict[str, Any]]:
         session = self._get_session()
         owns_session = self._session is None
         results = []
@@ -112,14 +110,16 @@ class DataQualityService:
             for symbol in symbols:
                 stock = stock_map.get(symbol.upper())
                 if stock is None:
-                    results.append({
-                        "symbol": symbol.upper(),
-                        "trust_score": 0.0,
-                        "status": "unsafe",
-                        "safe": False,
-                        "reason": "stock_not_found",
-                        "components": {},
-                    })
+                    results.append(
+                        {
+                            "symbol": symbol.upper(),
+                            "trust_score": 0.0,
+                            "status": "unsafe",
+                            "safe": False,
+                            "reason": "stock_not_found",
+                            "components": {},
+                        }
+                    )
                     continue
 
                 price = session.scalar(
@@ -129,14 +129,16 @@ class DataQualityService:
                     )
                 )
                 if price is None:
-                    results.append({
-                        "symbol": symbol.upper(),
-                        "trust_score": 0.0,
-                        "status": "unsafe",
-                        "safe": False,
-                        "reason": "no_price_data",
-                        "components": {},
-                    })
+                    results.append(
+                        {
+                            "symbol": symbol.upper(),
+                            "trust_score": 0.0,
+                            "status": "unsafe",
+                            "safe": False,
+                            "reason": "no_price_data",
+                            "components": {},
+                        }
+                    )
                     continue
 
                 trust_score, details, components = self._compute_trust_score(
@@ -157,14 +159,16 @@ class DataQualityService:
                 )
                 session.add(trust)
 
-                results.append({
-                    "symbol": symbol.upper(),
-                    "trust_score": trust_score,
-                    "status": status,
-                    "safe": is_safe,
-                    "details": details,
-                    "components": components,
-                })
+                results.append(
+                    {
+                        "symbol": symbol.upper(),
+                        "trust_score": trust_score,
+                        "status": status,
+                        "safe": is_safe,
+                        "details": details,
+                        "components": components,
+                    }
+                )
 
             session.commit()
             return results
@@ -242,9 +246,7 @@ class DataQualityService:
             if owns_session:
                 session.close()
 
-    def get_symbol_trust_trend(
-        self, symbol: str, window: int = 30
-    ) -> dict[str, Any]:
+    def get_symbol_trust_trend(self, symbol: str, window: int = 30) -> dict[str, Any]:
         session = self._get_session()
         owns_session = self._session is None
         try:
@@ -366,7 +368,10 @@ class DataQualityService:
                         payload = json.loads(log.errors)
                         samples = payload.get("sample_rejected", [])
                         for sample in samples:
-                            if sample.get("date") == date_str and sample.get("symbol") == symbol.upper():
+                            if (
+                                sample.get("date") == date_str
+                                and sample.get("symbol") == symbol.upper()
+                            ):
                                 val = sample.get(price_field)
                                 if val is not None:
                                     values_by_source[source.name] = float(val)
@@ -397,7 +402,8 @@ class DataQualityService:
                     "field": price_field,
                     "value": current_val,
                     "sources_checked": list(values_by_source.keys()),
-                    "max_deviation_pct": max(abs(v - current_val) / current_val for v in vals) * 100,
+                    "max_deviation_pct": max(abs(v - current_val) / current_val for v in vals)
+                    * 100,
                 }
 
             return {
@@ -406,7 +412,11 @@ class DataQualityService:
                 "field": price_field,
                 "value": current_val,
                 "sources_checked": list(values_by_source.keys()),
-                "discrepancies": {k: v for k, v in values_by_source.items() if abs(v - current_val) / current_val >= 0.05},
+                "discrepancies": {
+                    k: v
+                    for k, v in values_by_source.items()
+                    if abs(v - current_val) / current_val >= 0.05
+                },
             }
         finally:
             if owns_session:
@@ -423,9 +433,7 @@ class DataQualityService:
                 query = query.where(DataQualityAlert.report_id == report_id)
             if acknowledged:
                 query = query.where(DataQualityAlert.acknowledged.is_(True))
-            alerts = session.scalars(
-                query.order_by(DataQualityAlert.created_at.desc())
-            ).all()
+            alerts = session.scalars(query.order_by(DataQualityAlert.created_at.desc())).all()
             return [
                 {
                     "id": a.id,
@@ -503,9 +511,7 @@ class DataQualityService:
             if owns_session:
                 session.close()
 
-    def _persist_system_mode(
-        self, session: Session, mode_result: dict[str, Any]
-    ) -> None:
+    def _persist_system_mode(self, session: Session, mode_result: dict[str, Any]) -> None:
         history = SystemModeHistory(
             timestamp=datetime.now(UTC),
             mode=mode_result["mode"],
@@ -559,9 +565,7 @@ class DataQualityService:
                 return None
 
             sources = list(
-                session.scalars(
-                    sa.select(DataSource).where(DataSource.is_active.is_(True))
-                ).all()
+                session.scalars(sa.select(DataSource).where(DataSource.is_active.is_(True))).all()
             )
             if not sources:
                 return float(getattr(price, price_field) or 0)
@@ -655,12 +659,14 @@ class DataQualityService:
                     source.is_active = True
                     source.accuracy_score = accuracy
                     session.add(source)
-                    recovered.append({
-                        "source_id": source.id,
-                        "name": source.name,
-                        "accuracy_score": accuracy,
-                        "recovered": True,
-                    })
+                    recovered.append(
+                        {
+                            "source_id": source.id,
+                            "name": source.name,
+                            "accuracy_score": accuracy,
+                            "recovered": True,
+                        }
+                    )
 
             session.commit()
             return recovered
@@ -675,9 +681,7 @@ class DataQualityService:
         try:
             threshold_date = datetime.now(UTC).date() - timedelta(days=days_threshold)
             old_trusts = list(
-                session.scalars(
-                    sa.select(DataTrust).where(DataTrust.date <= threshold_date)
-                ).all()
+                session.scalars(sa.select(DataTrust).where(DataTrust.date <= threshold_date)).all()
             )
 
             for trust in old_trusts:

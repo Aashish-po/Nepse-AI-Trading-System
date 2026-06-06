@@ -36,18 +36,12 @@ class IngestionLog(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     source: Mapped[str] = mapped_column(String(100), nullable=True)
-    source_id: Mapped[int] = mapped_column(
-        ForeignKey("data_sources.id"), nullable=True
-    )
+    source_id: Mapped[int] = mapped_column(ForeignKey("data_sources.id"), nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="failed")
     records_fetched: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     records_inserted: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     records_rejected: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     duration_seconds: Mapped[float] = mapped_column(Float, nullable=True)
     errors: Mapped[str] = mapped_column(Text, nullable=True)
-    started_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
-    completed_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

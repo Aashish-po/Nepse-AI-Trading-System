@@ -17,16 +17,13 @@ class JSONFormatter(logging.Formatter):
         standard_attrs = set(vars(logging.makeLogRecord({})).keys())
 
         extra_fields = {
-            key: value
-            for key, value in record.__dict__.items()
-            if key not in standard_attrs
+            key: value for key, value in record.__dict__.items() if key not in standard_attrs
         }
 
         if extra_fields:
             log_data["extra"] = extra_fields
 
         return json.dumps(log_data)
-
 
 
 def configure_logging() -> None:
@@ -43,4 +40,3 @@ def configure_logging() -> None:
 
     for name in ("sqlalchemy", "alembic"):
         logging.getLogger(name).setLevel(logging.WARNING)
-

@@ -163,7 +163,6 @@ def test_get_system_mode_result(db_session: Session) -> None:
 
 
 def test_signal_generation_allowed_respects_safemode(db_session: Session) -> None:
-
     gate = DataQualityGate(session=db_session)
 
     allowed = gate.get_signal_generation_allowed()

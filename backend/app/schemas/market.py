@@ -36,4 +36,3 @@ class PriceResponse(BaseModel):
     low: Decimal | None
     close: Decimal | None
     volume: int | None
-

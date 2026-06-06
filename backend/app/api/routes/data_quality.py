@@ -1,4 +1,4 @@
-﻿from typing import Annotated
+from typing import Annotated
 
 import sqlalchemy as sa
 from fastapi import APIRouter, Depends
@@ -95,10 +95,17 @@ def get_source_accuracy(source_id: int, db: DbSession) -> dict:
 
 
 @router.get("/weighted-price/{symbol}/{date_str}")
-def get_weighted_price(symbol: str, date_str: str, db: DbSession, price_field: str = "close") -> dict:
+def get_weighted_price(
+    symbol: str, date_str: str, db: DbSession, price_field: str = "close"
+) -> dict:
     service = DataQualityService(session=db)
     result = service.calculate_weighted_price(symbol, date_str, price_field)
-    return {"symbol": symbol.upper(), "date": date_str, "price_field": price_field, "weighted_price": result}
+    return {
+        "symbol": symbol.upper(),
+        "date": date_str,
+        "price_field": price_field,
+        "weighted_price": result,
+    }
 
 
 @router.get("/source-drift/{source_id}")
@@ -114,7 +121,15 @@ def get_mode_history(db: DbSession, limit: int = 100) -> list[dict]:
             sa.select(SystemModeHistory).order_by(SystemModeHistory.timestamp.desc()).limit(limit)
         ).all()
     )
-    return [{"timestamp": m.timestamp.isoformat(), "mode": m.mode, "unsafe_ratio": m.unsafe_ratio, "total_symbols": m.total_symbols} for m in modes]
+    return [
+        {
+            "timestamp": m.timestamp.isoformat(),
+            "mode": m.mode,
+            "unsafe_ratio": m.unsafe_ratio,
+            "total_symbols": m.total_symbols,
+        }
+        for m in modes
+    ]
 
 
 @router.post("/sources/recover-blacklisted")

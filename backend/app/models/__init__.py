@@ -1,4 +1,4 @@
-﻿from backend.app.models.backtest import Backtest
+from backend.app.models.backtest import Backtest
 from backend.app.models.data_quality import (
     DataQualityAlert,
     DataQualityReport,

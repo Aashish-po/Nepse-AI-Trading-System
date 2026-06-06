@@ -1,4 +1,4 @@
-﻿from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -11,7 +11,7 @@ from backend.app.services.data_quality import DataQualityService
 
 def _seed_price(
     db: Session,
-    symbol: str,        
+    symbol: str,
     price_date: str,
     close: float = 100.0,
     volume: int = 1000,
@@ -52,9 +52,7 @@ def test_trust_score_missing_volume_lowers_score(db_session: Session) -> None:
     stock = db_session.scalar(select(Stock).where(Stock.symbol == "NICA"))
     assert stock is not None
     price = db_session.scalar(
-        select(Price).where(
-            Price.stock_id == stock.id, Price.date == date(2024, 6, 1)
-        )
+        select(Price).where(Price.stock_id == stock.id, Price.date == date(2024, 6, 1))
     )
     assert price is not None
     price.volume = None  # type: ignore[assignment]
@@ -171,12 +169,8 @@ def test_warning_zone_classification(db_session: Session) -> None:
 
 def test_rolling_volume_anomaly(db_session: Session) -> None:
     for i in range(25):
-        _seed_price(
-            db_session, "ROLL", f"2024-06-{i+1:02d}", close=100.0, volume=1000
-        )
-    _seed_price(
-        db_session, "ROLL", "2024-06-26", close=100.0, volume=10000000
-    )
+        _seed_price(db_session, "ROLL", f"2024-06-{i+1:02d}", close=100.0, volume=1000)
+    _seed_price(db_session, "ROLL", "2024-06-26", close=100.0, volume=10000000)
 
     service = DataQualityService(session=db_session)
     result = service.evaluate_symbol_date("ROLL", "2024-06-26")
@@ -207,9 +201,7 @@ def test_symbol_trust_trend(db_session: Session) -> None:
     start = date(2024, 5, 1)
     for i in range(30):
         price_date = start + timedelta(days=i)
-        _seed_price(
-            db_session, "TREND", price_date.strftime("%Y-%m-%d"), close=100.0, volume=1000
-        )
+        _seed_price(db_session, "TREND", price_date.strftime("%Y-%m-%d"), close=100.0, volume=1000)
 
     service = DataQualityService(session=db_session)
     for i in range(30):
@@ -427,11 +419,14 @@ def test_system_mode_persists_history(db_session: Session) -> None:
     service.evaluate_symbol_date("HIST", "2024-06-01")
     service.get_system_mode()
 
-    count = db_session.scalar(
-        select(func.count()).select_from(SystemModeHistory).where(
-            SystemModeHistory.mode == "NORMAL"
+    count = (
+        db_session.scalar(
+            select(func.count())
+            .select_from(SystemModeHistory)
+            .where(SystemModeHistory.mode == "NORMAL")
         )
-    ) or 0
+        or 0
+    )
     assert count >= 1
 
 
@@ -512,9 +507,7 @@ def test_trust_decay_applied(db_session: Session) -> None:
 
     stock = db_session.scalar(select(Stock).where(Stock.symbol == "DECAY"))
     assert stock is not None
-    old_trust = db_session.scalar(
-        select(DataTrust).where(DataTrust.stock_id == stock.id)
-    )
+    old_trust = db_session.scalar(select(DataTrust).where(DataTrust.stock_id == stock.id))
     assert old_trust is not None
     old_trust.date = datetime.now(UTC).date() - td(days=60)
     db_session.add(old_trust)
@@ -522,4 +515,4 @@ def test_trust_decay_applied(db_session: Session) -> None:
 
     count = service.apply_trust_decay(days_threshold=30, decay_factor=0.95)
 
-    assert count >= 1 
+    assert count >= 1
