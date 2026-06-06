@@ -22,4 +22,6 @@ class Feature(Base):
     feature_version: Mapped[str] = mapped_column(String(50), nullable=False)
     trust_score: Mapped[float] = mapped_column(Float, nullable=True)
     trust_version: Mapped[str] = mapped_column(String(20), nullable=True)
+    confidence: Mapped[float] = mapped_column(Float, nullable=True)
+    features_meta: Mapped[dict] = mapped_column(json_dict_type, nullable=True)
     values: Mapped[dict] = mapped_column(json_dict_type, nullable=False)

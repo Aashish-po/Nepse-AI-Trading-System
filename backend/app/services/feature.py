@@ -25,7 +25,7 @@ from backend.app.services.data_quality_gate import DataQualityGate, DataQualityG
 
 logger = logging.getLogger(__name__)
 
-FEATURE_VERSION = "v1.0.0"
+FEATURE_VERSION = "v2.0.0-trust_aware"
 
 
 class FeatureService:

@@ -3,6 +3,9 @@
 .env.*
 !.env.example
 .env.example
+.kilonix/
+secrets/
+
 
 # Python virtual environments
 .venv/
@@ -26,6 +29,8 @@ dist/
 *.egg-info/
 .eggs/
 pip-wheel-metadata/
+.tox/
+.pyinstaller/
 
 # Local databases and runtime files
 *.db
@@ -33,6 +38,8 @@ pip-wheel-metadata/
 *.sqlite3
 *.log
 *.pid
+.pytest_cache/
+
 
 # Data and generated research outputs
 data/raw/*
@@ -42,6 +49,7 @@ data/reports/
 artifacts/
 reports/
 exports/
+
 
 # ML and experiment tracking outputs
 mlruns/
@@ -53,6 +61,7 @@ tensorboard/
 *.onnx
 *.pt
 *.joblib
+.model/
 
 # Notebook checkpoints
 .ipynb_checkpoints/
@@ -64,6 +73,7 @@ infra/docker-compose.override.yml
 postgres_data/
 redis_data/
 
+
 # IDE and OS noise
 .vscode/*
 !.vscode/extensions.json
@@ -71,4 +81,5 @@ redis_data/
 .idea/
 .DS_Store
 Thumbs.db
+.kilo
 
