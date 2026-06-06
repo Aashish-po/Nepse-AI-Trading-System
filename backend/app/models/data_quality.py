@@ -11,7 +11,7 @@ class HolidayCalendar(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     date: Mapped[datetime.date] = mapped_column(Date, nullable=False, unique=True)
-    description: Mapped[str] = mapped_column(String(255), nullable=True)
+    description: Mapped[str] = mapped_column(String(255), nullable=True)  # type: ignore[assignment]
     is_trading_holiday: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_trading_day: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
@@ -27,11 +27,11 @@ class DataTrust(Base):
     stock_id: Mapped[int] = mapped_column(Integer, nullable=False)
     date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     trust_score: Mapped[float] = mapped_column(Float, nullable=False)
-    completeness_score: Mapped[float] = mapped_column(Float, nullable=True)
-    volume_anomaly_detected: Mapped[bool] = mapped_column(Boolean, nullable=True)
-    missing_dates_count: Mapped[int] = mapped_column(Integer, nullable=True)
-    rejected_count: Mapped[int] = mapped_column(Integer, nullable=True)
-    details: Mapped[str] = mapped_column(Text, nullable=True)
+    completeness_score: Mapped[float] = mapped_column(Float, nullable=True)  # type: ignore[assignment]
+    volume_anomaly_detected: Mapped[bool] = mapped_column(Boolean, nullable=True)  # type: ignore[assignment]
+    missing_dates_count: Mapped[int] = mapped_column(Integer, nullable=True)  # type: ignore[assignment]
+    rejected_count: Mapped[int] = mapped_column(Integer, nullable=True)  # type: ignore[assignment]
+    details: Mapped[str] = mapped_column(Text, nullable=True)  # type: ignore[assignment]
 
 
 class DataQualityReport(Base):
@@ -42,11 +42,11 @@ class DataQualityReport(Base):
     total_symbols: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     symbols_passed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     symbols_failed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    avg_trust_score: Mapped[float] = mapped_column(Float, nullable=True)
+    avg_trust_score: Mapped[float] = mapped_column(Float, nullable=True)  # type: ignore[assignment]
     total_rejected_records: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_missing_dates: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_volume_anomalies: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    details: Mapped[str] = mapped_column(Text, nullable=True)
+    details: Mapped[str] = mapped_column(Text, nullable=True)  # type: ignore[assignment]
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False
     )
@@ -66,7 +66,7 @@ class DataQualityAlert(Base):
     date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     severity: Mapped[str] = mapped_column(String(20), nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)
-    details: Mapped[str] = mapped_column(Text, nullable=True)
+    details: Mapped[str] = mapped_column(Text, nullable=True)  # type: ignore[assignment]
     acknowledged: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False

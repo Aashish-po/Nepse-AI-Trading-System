@@ -50,12 +50,14 @@ def test_trust_score_missing_volume_lowers_score(db_session: Session) -> None:
     _seed_price(db_session, "NICA", "2024-06-01", close=100.0, volume=1000)
 
     stock = db_session.scalar(select(Stock).where(Stock.symbol == "NICA"))
+    assert stock is not None
     price = db_session.scalar(
         select(Price).where(
             Price.stock_id == stock.id, Price.date == date(2024, 6, 1)
         )
     )
-    price.volume = None
+    assert price is not None
+    price.volume = None  # type: ignore[assignment]
     db_session.commit()
 
     service = DataQualityService(session=db_session)
@@ -429,7 +431,7 @@ def test_system_mode_persists_history(db_session: Session) -> None:
         select(func.count()).select_from(SystemModeHistory).where(
             SystemModeHistory.mode == "NORMAL"
         )
-    )
+    ) or 0
     assert count >= 1
 
 
@@ -509,9 +511,11 @@ def test_trust_decay_applied(db_session: Session) -> None:
     service.evaluate_symbol_date("DECAY", "2024-01-01")
 
     stock = db_session.scalar(select(Stock).where(Stock.symbol == "DECAY"))
+    assert stock is not None
     old_trust = db_session.scalar(
         select(DataTrust).where(DataTrust.stock_id == stock.id)
     )
+    assert old_trust is not None
     old_trust.date = datetime.now(UTC).date() - td(days=60)
     db_session.add(old_trust)
     db_session.commit()
