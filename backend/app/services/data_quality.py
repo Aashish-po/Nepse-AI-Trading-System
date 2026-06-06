@@ -1092,9 +1092,7 @@ class DataQualityService:
                                 "correlation": correlation,
                             }
                         )
-                        self._persist_source_correlation(
-                            session, src_a.id, src_b.id, correlation
-                        )
+                        self._persist_source_correlation(session, src_a.id, src_b.id, correlation)
 
             return correlations
         finally:
@@ -1229,7 +1227,29 @@ class DataQualityService:
             now = datetime.now(UTC)
             active = []
             for o in overrides:
-                if o.expires_at is None or o.expires_at > now:
+                if o.expires_at is None:
+                    active.append(
+                        {
+                            "event_type": o.event_type,
+                            "date": o.date.isoformat(),
+                            "symbol": o.symbol,
+                            "sensitivity_multiplier": o.sensitivity_multiplier,
+                            "reason": o.reason,
+                        }
+                    )
+                elif o.expires_at.tzinfo is None:
+                    expires_at = o.expires_at.replace(tzinfo=UTC)
+                    if expires_at > now:
+                        active.append(
+                            {
+                                "event_type": o.event_type,
+                                "date": o.date.isoformat(),
+                                "symbol": o.symbol,
+                                "sensitivity_multiplier": o.sensitivity_multiplier,
+                                "reason": o.reason,
+                            }
+                        )
+                elif o.expires_at > now:
                     active.append(
                         {
                             "event_type": o.event_type,

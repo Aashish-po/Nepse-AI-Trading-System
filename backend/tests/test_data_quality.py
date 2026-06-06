@@ -526,9 +526,7 @@ def test_trust_version_persisted(db_session: Session) -> None:
 
     stock = db_session.scalar(select(Stock).where(Stock.symbol == "VER1"))
     assert stock is not None
-    trust = db_session.scalar(
-        select(DataTrust).where(DataTrust.stock_id == stock.id)
-    )
+    trust = db_session.scalar(select(DataTrust).where(DataTrust.stock_id == stock.id))
     assert trust is not None
     assert trust.trust_version == "v1"
 
