@@ -18,8 +18,8 @@ from sqlalchemy.orm import Session
 from backend.app.models.feature import Feature
 from backend.app.models.price import Price
 from backend.app.models.stock import Stock
-from backend.ml.feature_vector import build_feature_vector
-from backend.ml.labeling import LabelConfig, create_labels
+from ml.feature_vector import build_feature_vector
+from ml.labeling import LabelConfig, create_labels
 
 logger = logging.getLogger(__name__)
 

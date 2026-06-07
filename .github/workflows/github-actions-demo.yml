@@ -1,20 +1,39 @@
-name: GitHub Actions Demo
-run-name: ${{ github.actor }} is testing out GitHub Actions 🚀
-on: [push]
+name: Run RiskManager Test
+
+on:
+  push:
+    branches: ["main"]
+
 jobs:
-  Explore-GitHub-Actions:
+  test:
     runs-on: ubuntu-latest
+
     steps:
-      - run: echo "🎉 The job was automatically triggered by a ${{ github.event_name }} event."
-      - run: echo "🐧 This job is now running on a ${{ runner.os }} server hosted by GitHub!"
-      - run: echo "🔎 The name of your branch is ${{ github.ref }} and your repository is ${{ github.repository }}."
-      - name: Check out repository code
-        uses: actions/checkout@v6
-      - run: echo "💡 The ${{ github.repository }} repository has been cloned to the runner."
-      - run: echo "🖥️ The workflow is now ready to test your code on the runner."
-      - name: List files in the repository
+      # ✅ Checkout repo
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ✅ Setup Python
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # ✅ Install dependencies
+      - name: Install dependencies
         run: |
-          ls ${{ github.workspace }}
-      - run: echo "🍏 This job's status is ${{ job.status }}."
-      - run: echo "✅ The ${{ github.workflow }} workflow has completed successfully!"
-      
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # ✅ Debug (important for path issues)
+      - name: Debug paths
+        run: |
+          pwd
+          ls -R
+          python -c "import sys; print(sys.path)"
+
+      # ✅ Run your RiskManager test
+      - name: Test RiskManager
+        run: |
+          export PYTHONPATH=$(pwd)
+          python -c "from ml.risk_management import RiskManager; rm = RiskManager(); print(rm.max_drawdown)"

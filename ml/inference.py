@@ -9,7 +9,7 @@ from typing import Any
 import joblib
 import numpy as np
 
-from backend.ml.feature_vector import FEATURE_ORDER, build_feature_vector
+from ml.feature_vector import FEATURE_ORDER, build_feature_vector
 
 logger = logging.getLogger(__name__)
 

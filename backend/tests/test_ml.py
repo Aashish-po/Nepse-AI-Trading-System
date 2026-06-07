@@ -23,21 +23,21 @@ from backend.app.services.feature import (
     FEATURE_VERSION,
     FeatureService,
 )
-from backend.ml.dataset import DatasetBuilder, DatasetBundle
-from backend.ml.drift_monitoring import CorrelationMonitor, DriftMonitor
-from backend.ml.evaluation import ModelEvaluator
-from backend.ml.experiment_tracking import ExperimentTracker
-from backend.ml.feature_vector import (
+from ml.dataset import DatasetBuilder, DatasetBundle
+from ml.drift_monitoring import CorrelationMonitor, DriftMonitor
+from ml.evaluation import ModelEvaluator
+from ml.experiment_tracking import ExperimentTracker
+from ml.feature_vector import (
     FEATURE_DIM,
     FEATURE_ORDER,
     build_feature_vector,
     fill_missing,
     validate_vector,
 )
-from backend.ml.labeling import LabelConfig, LabelMode, create_labels
-from backend.ml.position_sizing import PositionSizer, SizingMethod
-from backend.ml.risk_management import RiskManager, StopLossManager
-from backend.ml.training import ModelTrainer
+from ml.labeling import LabelConfig, LabelMode, create_labels
+from ml.position_sizing import PositionSizer, SizingMethod
+from ml.risk_manager import RiskManager, StopLossManager
+from ml.training import ModelTrainer
 
 
 @pytest.fixture

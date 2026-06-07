@@ -12,7 +12,7 @@ from sklearn.linear_model import LogisticRegression
 from sqlalchemy.orm import Session
 
 from backend.app.models.model_registry import ModelRegistry
-from backend.ml.dataset import DatasetBundle
+from ml.dataset import DatasetBundle
 
 logger = logging.getLogger(__name__)
 
