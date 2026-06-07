@@ -9,31 +9,31 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ✅ Checkout repo
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ✅ Setup Python
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
-      # ✅ Install dependencies
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
 
-      # ✅ Debug (important for path issues)
       - name: Debug paths
         run: |
           pwd
-          ls -R
+          ls -la
           python -c "import sys; print(sys.path)"
 
-      # ✅ Run your RiskManager test
       - name: Test RiskManager
         run: |
           export PYTHONPATH=$(pwd)
-          python -c "from ml.risk_management import RiskManager; rm = RiskManager(); print(rm.max_drawdown)"
+          python -c "from ml.risk_manager import RiskManager; rm = RiskManager(); print(rm.max_drawdown)"
+
+      - name: Run pytest
+        run: |
+          export PYTHONPATH=$(pwd)
+          python -m pytest backend/tests/ -v

@@ -42,6 +42,11 @@ class RiskManager:
         self._peak_equity: float = 0.0
         self._max_drawdown_seen: float = 0.0
 
+    @property
+    def max_drawdown(self) -> float:
+        """Return the configured maximum drawdown threshold."""
+        return self._max_drawdown
+
     def evaluate(self, symbol: str, equity: float, positions: dict[str, float]) -> RiskState:
         if equity > self._peak_equity:
             self._peak_equity = equity
@@ -49,6 +54,8 @@ class RiskManager:
         drawdown = (
             (equity - self._peak_equity) / self._peak_equity if self._peak_equity > 0 else 0.0
         )
+        if drawdown < -self._max_drawdown_seen:
+            self._max_drawdown_seen = drawdown
         total_exposure = sum(positions.values())
 
         return RiskState(

@@ -9,56 +9,18 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ✅ Checkout
       - name: Checkout
         uses: actions/checkout@v5
 
-      # ✅ Python setup
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
-      # ✅ Install deps
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
-
-      # ✅ Auto-format & commit
-      - name: Auto-format & commit
-        run: |
-          ruff format .
-          ruff check . --fix
-
-          git config --global user.name "github-actions"
-          git config --global user.email "actions@github.com"
-
-          git add .
-          git commit -m "ci: auto-format with ruff" || echo "No changes"
-          git push || echo "No changes to push"
-
-      # ✅ Enforce formatting (safety net)
-      - name: Ruff format check
-        run: ruff format --check .
-
-      # ✅ Run tests
-      - name: Run tests
-        run: pytest
-        env:
-          PYTHONPATH: ${{ github.workspace }}
-
-      # ✅ API import smoke test
-      - name: API import smoke check
-        run: python -c "from backend.app.main import app; print(app.title)"
-        env:
-          PYTHONPATH: ${{ github.workspace }}
-
-      # ✅ ML module import smoke test
-      - name: ML module import smoke check
-        run: python -c "from backend.ml.risk_manager import RiskManager; rm = RiskManager(); print(rm.max_drawdown)"
-        env:
-          PYTHONPATH: ${{ github.workspace }}
 
       - name: Cache pip
         uses: actions/cache@v4
@@ -68,27 +30,20 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-pip-
 
-      - name: Run test
-        run: |
-          export PYTHONPATH=$(pwd)
-          python -c "from ml.risk_management import RiskManager; rm = RiskManager(); print(rm.max_drawdown)"
+      - name: Lint with ruff
+        run: ruff check .
 
-      - name: Run test
-        run: |
-          export PYTHONPATH=$(pwd)
-          python -c "from app.main import app; print(app.title)"
+      - name: Run tests
+        run: python -m pytest backend/tests/ -v
+        env:
+          PYTHONPATH: ${{ github.workspace }}
 
-      - name: Run test
-        run: |
-          export PYTHONPATH=$(pwd)
-          pytest
+      - name: API import smoke test
+        run: python -c "from backend.app.main import app; print(app.title)"
+        env:
+          PYTHONPATH: ${{ github.workspace }}
 
-      - name: Run test
-        run: |
-          export PYTHONPATH=$(pwd)
-          ruff check . --fix
-
-      - name: Run test
-        run: |
-          export PYTHONPATH=$(pwd)
-          ruff format --check .
+      - name: ML module import smoke test
+        run: python -c "from ml.risk_manager import RiskManager; rm = RiskManager(); print(rm.max_drawdown)"
+        env:
+          PYTHONPATH: ${{ github.workspace }}
