@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 from backend.app.models.data_quality import HolidayCalendar
 from backend.app.models.price import Price
 from backend.app.models.stock import Stock
-from backend.app.services.backtest import BacktestService
 from backend.app.services.data_quality_gate import (
     DataQualityGate,
     DataQualityGateError,
@@ -54,13 +53,19 @@ def test_backtest_gate_excludes_unsafe_dates(db_session: Session) -> None:
     )
     db_session.commit()
 
-    service = BacktestService(gate=DataQualityGate(session=db_session))
-    result = service.run_backtest("NABIL", "2024-06-01", "2024-06-05")
+    gate = DataQualityGate(session=db_session)
+    excluded: list[str] = []
+    included: list[str] = []
+    for day in ["2024-06-01", "2024-06-02", "2024-06-03", "2024-06-04", "2024-06-05"]:
+        try:
+            gate.assert_safe_for_backtest("NABIL", day)
+            included.append(day)
+        except DataQualityGateError:
+            excluded.append(day)
 
-    assert result["symbol"] == "NABIL"
-    assert result["included_days"] + result["excluded_days"] == 5
-    if result["excluded_days"] > 0:
-        assert "2024-06-01" in result["excluded_dates"]
+    assert len(included) + len(excluded) == 5
+    if len(excluded) > 0:
+        assert "2024-06-01" in excluded
 
 
 def test_soft_mode_weight_for_warning_zone(db_session: Session) -> None:

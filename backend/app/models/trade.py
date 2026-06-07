@@ -18,3 +18,5 @@ class Trade(Base):
     quantity: Mapped[int] = mapped_column(nullable=False)
     price: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
     timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    transaction_cost: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=True)
+    fill_rate: Mapped[Decimal] = mapped_column(Numeric(6, 4), nullable=True)
