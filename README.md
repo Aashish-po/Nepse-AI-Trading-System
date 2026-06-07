@@ -97,6 +97,7 @@ backend/
       data_quality.py         # Trust scoring, system mode, source accuracy, drift detection
       data_quality_gate.py    # Data quality gating for features and backtesting
       backtest.py             # Backtest execution with data quality enforcement
+      benchmark.py            # Benchmark comparison, alpha/beta calculation
       ingestion.py            # Data ingestion service
       market.py               # Market data service
       auth.py                 # Authentication service
@@ -202,9 +203,12 @@ Use `research/notebooks/` for exploratory analysis. All experimental results mus
 
 - Realistic backtesting with fees, slippage, liquidity filters, partial fills
 - Strategy registry with versioned configurations
+- Multi-condition strategy logic (AND/OR operators)
+- Stop loss, take profit, and trailing stop exits
 - Data quality gating for backtest safety
 - Technical indicators (RSI, SMA, EMA, MACD, ATR, returns)
 - Transaction cost and fill rate modeling
+- Portfolio-level constraints (max positions, cash reserves)
 
 ### Backtesting Realism
 
@@ -216,6 +220,7 @@ The backtesting engine includes:
 - **Execution Delay**: Configurable bar delay for order execution
 - **Cash Tracking**: Real-time cash and position accounting
 - **Equity Curves**: Full portfolio equity history for every backtest
+- **Trailing Stop**: Dynamic stop loss that tracks price peaks
 
 ### Safety Controls
 

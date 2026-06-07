@@ -94,49 +94,68 @@ class StrategyService:
         entry_rules: list[dict],
     ) -> bool:
         for rule in entry_rules:
-            rule_type = rule.get("rule")
-            params = rule.get("params", {})
+            operator = rule.get("operator", "OR")
+            conditions = rule.get("conditions", [rule] if "rule" in rule else [])
 
-            if rule_type == "rsi_oversold":
-                rsi = features.get("rsi_14")
-                if rsi is not None and rsi < params.get("threshold", 30):
+            if "rule" in rule:
+                conditions = [rule]
+
+            if operator == "AND":
+                all_met = True
+                for cond in conditions:
+                    if not self._evaluate_condition(cond, features):
+                        all_met = False
+                        break
+                if all_met:
                     return True
-            elif rule_type == "rsi_overbought":
-                rsi = features.get("rsi_14")
-                if rsi is not None and rsi > params.get("threshold", 70):
+            else:
+                any_met = False
+                for cond in conditions:
+                    if self._evaluate_condition(cond, features):
+                        any_met = True
+                        break
+                if any_met:
                     return True
-            elif rule_type == "sma_cross_up":
-                sma_20 = features.get("sma_20")
-                sma_50 = features.get("sma_50")
-                close = features.get("close")
-                if (
-                    sma_20 is not None
-                    and sma_50 is not None
-                    and close is not None
-                    and sma_20 > sma_50
-                ):
-                    return True
-            elif rule_type == "sma_cross_down":
-                sma_20 = features.get("sma_20")
-                sma_50 = features.get("sma_50")
-                close = features.get("close")
-                if (
-                    sma_20 is not None
-                    and sma_50 is not None
-                    and close is not None
-                    and sma_20 < sma_50
-                ):
-                    return True
-            elif rule_type == "macd_cross_up":
-                macd = features.get("macd")
-                signal = features.get("macd_signal")
-                if macd is not None and signal is not None and macd > signal:
-                    return True
-            elif rule_type == "breakout_high":
-                close = features.get("close")
-                high_threshold = params.get("threshold", 105.0)
-                if close is not None and close > high_threshold:
-                    return True
+
+        return False
+
+    def _evaluate_condition(
+        self,
+        rule: dict,
+        features: Mapping[str, float | None],
+    ) -> bool:
+        rule_type = rule.get("rule")
+        params = rule.get("params", {})
+
+        if rule_type == "rsi_oversold":
+            rsi = features.get("rsi_14")
+            if rsi is not None and rsi < params.get("threshold", 30):
+                return True
+        elif rule_type == "rsi_overbought":
+            rsi = features.get("rsi_14")
+            if rsi is not None and rsi > params.get("threshold", 70):
+                return True
+        elif rule_type == "sma_cross_up":
+            sma_20 = features.get("sma_20")
+            sma_50 = features.get("sma_50")
+            if sma_20 is not None and sma_50 is not None and sma_20 > sma_50:
+                return True
+        elif rule_type == "sma_cross_down":
+            sma_20 = features.get("sma_20")
+            sma_50 = features.get("sma_50")
+            close = features.get("close")
+            if sma_20 is not None and sma_50 is not None and close is not None and sma_20 < sma_50:
+                return True
+        elif rule_type == "macd_cross_up":
+            macd = features.get("macd")
+            signal = features.get("macd_signal")
+            if macd is not None and signal is not None and macd > signal:
+                return True
+        elif rule_type == "breakout_high":
+            close = features.get("close")
+            high_threshold = params.get("threshold", 105.0)
+            if close is not None and close > high_threshold:
+                return True
 
         return False
 
@@ -157,13 +176,35 @@ class StrategyService:
                 if rsi is not None and rsi > params.get("threshold", 70):
                     return True
             elif rule_type == "take_profit":
-                profit_target = params.get("target", 0.1)
-                if position and position.unrealized_return > profit_target:
-                    return True
+                target = params.get("target", 0.1)
+                if position:
+                    current_price = features.get("close")
+                    if current_price and position.entry_price:
+                        return_pct = (float(current_price) - float(position.entry_price)) / float(
+                            position.entry_price
+                        )
+                        if return_pct >= target:
+                            return True
             elif rule_type == "stop_loss":
-                stop_threshold = params.get("stop", 0.05)
-                if position and position.unrealized_return < -stop_threshold:
-                    return True
+                stop = params.get("stop", 0.05)
+                if position:
+                    current_price = features.get("close")
+                    if current_price and position.entry_price:
+                        return_pct = (float(current_price) - float(position.entry_price)) / float(
+                            position.entry_price
+                        )
+                        if return_pct <= -stop:
+                            return True
+            elif rule_type == "trailing_stop":
+                trail_pct = params.get("trail_pct", 0.10)
+                if position and hasattr(position, "trailing_high"):
+                    close = features.get("close")
+                    if close:
+                        if float(close) > position.trailing_high:
+                            position.trailing_high = float(close)
+                        trail_level = position.trailing_high * (1 - trail_pct)
+                        if float(close) < trail_level:
+                            return True
 
         return False
 
