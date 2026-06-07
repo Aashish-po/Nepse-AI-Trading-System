@@ -346,8 +346,6 @@ def test_feature_correlations_compute_per_feature_penalty() -> None:
 
 
 def test_trust_version_persisted_in_bulk(db_session: Session) -> None:
-    from sqlalchemy import func
-
     _seed_price_series(db_session, "TRUST_VER", "2024-01-01", count=30)
 
     service = FeatureService(session=db_session)
