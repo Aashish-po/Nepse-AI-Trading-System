@@ -5,76 +5,67 @@ on:
   pull_request:
 
 jobs:
-  test:
+  ci:
     runs-on: ubuntu-latest
 
     steps:
-      #  Checkout (updated)
+      # ✅ Checkout
       - name: Checkout
         uses: actions/checkout@v5
 
-      #  Python setup (updated)
+      # ✅ Python setup
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
-      #  Install dependencies
+      # ✅ Install deps
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
 
-      #  Ruff autofix (runs FIRST)
-      - name: Ruff autofix
-        run: ruff check . --fix
+      # ✅ Auto-format & commit
+      - name: Auto-format & commit
+        run: |
+          ruff format .
+          ruff check . --fix
 
-      #  Ruff lint (strict checking)
+          git config --global user.name "github-actions"
+          git config --global user.email "actions@github.com"
 
-      - name: Ruff lint
-        run: ruff check .
+          git add .
+          git commit -m "ci: auto-format with ruff" || echo "No changes"
+          git push || echo "No changes to push"
 
-      #  Format check (clean code enforcement)
+      # ✅ Enforce formatting (safety net)
       - name: Ruff format check
         run: ruff format --check .
 
-      #  Run tests
-      - name: Test
+      # ✅ Run tests
+      - name: Run tests
         run: pytest
         env:
           PYTHONPATH: ${{ github.workspace }}
 
-      #  API import smoke test
+      # ✅ API import smoke test
       - name: API import smoke check
         run: python -c "from backend.app.main import app; print(app.title)"
         env:
           PYTHONPATH: ${{ github.workspace }}
 
-  #  Separate job for linting and formatting (optional)
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      # ✅ ML module import smoke test
+      - name: ML module import smoke check
+        run: python -c "from backend.ml.risk_manager import RiskManager; rm = RiskManager(); print(rm.max_drawdown)"
+        env:          
+          PYTHONPATH: ${{ github.workspace }}
+
+
+      - name: Cache pip
+        uses: actions/cache@v4
         with:
-          python-version: "3.11"
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
-
-      - name: ruff check
-        run: ruff check .
-      - name: ruff format check
-        run: ruff format --check .
-      - name: pytest
-        run: pytest
-        env:
-          PYTHONPATH: ${{ github.workspace }}
-      - name: API import smoke check
-
-        run: python -c "from backend.app.main import app; print(app.title)"
-        env:
-          PYTHONPATH: ${{ github.workspace }}
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements-dev.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+              

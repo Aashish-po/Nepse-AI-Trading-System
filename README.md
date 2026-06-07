@@ -11,18 +11,18 @@ Data Sources → Ingestion → Validation → Database → Feature Engineering
   → Data Quality → Trust Scoring → Backtesting → Dashboard / API / Alerts
 ```
 
-| Layer | Purpose |
-|---|---|
-| Data Platform | NEPSE OHLCV ingestion, corporate actions, news, economic indicators |
-| Data Quality | Trust scores, source accuracy, freshness checks, drift detection, safe mode |
-| Feature Engineering | Technical indicators, rolling statistics, regime labels, feature validation |
-| Backtesting | Realistic simulation with fees, slippage, liquidity filters, partial fills |
-| Strategy Registry | Versioned strategies, benchmark comparison, strategy evaluation |
-| Portfolio Simulation | Account simulation, position tracking, equity curves, allocation |
-| Explainability | Signal attribution, trade explanations, audit logs |
-| MLOps | MLflow tracking, model registry, experiment logging |
-| Infrastructure | FastAPI, PostgreSQL/TimescaleDB, Redis, Docker Compose |
-| UI | Streamlit dashboard, research workbench, alerts | |
+| Layer                | Purpose                                                                     |
+| -------------------- | --------------------------------------------------------------------------- | --- |
+| Data Platform        | NEPSE OHLCV ingestion, corporate actions, news, economic indicators         |
+| Data Quality         | Trust scores, source accuracy, freshness checks, drift detection, safe mode |
+| Feature Engineering  | Technical indicators, rolling statistics, regime labels, feature validation |
+| Backtesting          | Realistic simulation with fees, slippage, liquidity filters, partial fills  |
+| Strategy Registry    | Versioned strategies, benchmark comparison, strategy evaluation             |
+| Portfolio Simulation | Account simulation, position tracking, equity curves, allocation            |
+| Explainability       | Signal attribution, trade explanations, audit logs                          |
+| MLOps                | MLflow tracking, model registry, experiment logging                         |
+| Infrastructure       | FastAPI, PostgreSQL/TimescaleDB, Redis, Docker Compose                      |
+| UI                   | Streamlit dashboard, research workbench, alerts                             |     |
 
 ## MVP Stack
 
@@ -37,25 +37,25 @@ Data Sources → Ingestion → Validation → Database → Feature Engineering
 
 ## Implementation Roadmap
 
-| Phase | Focus Area | Key Deliverables |
-|---|---|---|
-| 0 | Foundation | Project structure, env config, CI, health endpoint |
-| 1 | Data Ingestion | Scrapers/API clients, raw landing, validation rules |
-| 2 | Database | PostgreSQL schema, indexes, TimescaleDB setup |
-| 3 | Feature Engineering | Technical indicators, feature store, feature validation |
-| 4 | Authentication | User auth, RBAC, JWT handling |
-| 5 | Backtesting Engine | Historical simulation, metrics, scenario testing |
-| 6 | LSTM & ML Models | Forecasting, training pipeline, model registry |
-| 7 | Sentiment & NLP | XLM-R pipeline, news ingestion, sentiment scoring |
-| 8 | Reinforcement Learning | PPO / DQN environments, reward functions, HRL |
-| 9 | Graph Neural Networks | Graph construction, relationship modeling, GCN |
-| 10 | Signal Fusion | Multi-model weighting, confidence calibration, attribution |
-| 11 | Risk Engine | Position sizing, exposure limits, drawdown protection |
-| 12 | Portfolio Optimization | Mean-variance, risk parity, rebalancing |
-| 13 | Explainability | SHAP integration, feature importance, audit logging |
-| 14 | Meta-Learning & MLOps | Auto-retraining, model selection, hyperparameter evolution |
-| 15 | Dashboard & Alerts | Market overview, signal explorer, portfolio analytics |
-| 16 | Production Deployment | Docker / Kubernetes, CI/CD, monitoring, backups |
+| Phase | Focus Area             | Key Deliverables                                           |
+| ----- | ---------------------- | ---------------------------------------------------------- |
+| 0     | Foundation             | Project structure, env config, CI, health endpoint         |
+| 1     | Data Ingestion         | Scrapers/API clients, raw landing, validation rules        |
+| 2     | Database               | PostgreSQL schema, indexes, TimescaleDB setup              |
+| 3     | Feature Engineering    | Technical indicators, feature store, feature validation    |
+| 4     | Authentication         | User auth, RBAC, JWT handling                              |
+| 5     | Backtesting Engine     | Historical simulation, metrics, scenario testing           |
+| 6     | LSTM & ML Models       | Forecasting, training pipeline, model registry             |
+| 7     | Sentiment & NLP        | XLM-R pipeline, news ingestion, sentiment scoring          |
+| 8     | Reinforcement Learning | PPO / DQN environments, reward functions, HRL              |
+| 9     | Graph Neural Networks  | Graph construction, relationship modeling, GCN             |
+| 10    | Signal Fusion          | Multi-model weighting, confidence calibration, attribution |
+| 11    | Risk Engine            | Position sizing, exposure limits, drawdown protection      |
+| 12    | Portfolio Optimization | Mean-variance, risk parity, rebalancing                    |
+| 13    | Explainability         | SHAP integration, feature importance, audit logging        |
+| 14    | Meta-Learning & MLOps  | Auto-retraining, model selection, hyperparameter evolution |
+| 15    | Dashboard & Alerts     | Market overview, signal explorer, portfolio analytics      |
+| 16    | Production Deployment  | Docker / Kubernetes, CI/CD, monitoring, backups            |
 
 Advanced AI (ensemble models, meta-learning), high-frequency workflows, and Kubernetes-scale orchestration are deferred until the MVP proves data quality and backtesting reliability.
 
@@ -104,33 +104,33 @@ backend/
 
 ## API Endpoints (Current)
 
-| Method | Endpoint | Description |
-|---|---|---|
-| GET | /health | Health check (status, environment, version, scope) |
-| POST | /auth/register | Register a new user |
-| POST | /auth/login | Login and receive access token |
-| GET | /market/prices | List price data with optional symbol filter |
-| POST | /market/ingest | Ingest a single price record for a stock |
-| POST | /market/ingest/batch | Batch ingest OHLCV data for a date range |
-| POST | /features/generate | Compute features for a single symbol/date |
-| POST | /features/generate-batch | Compute features for a date range (single symbol) |
-| POST | /features/generate-multi | Compute features across multiple symbols |
-| GET | /data-quality/trust/{symbol}/{date} | Get trust score and quality details |
-| GET | /data-quality/safe/{symbol}/{date} | Check if data is safe to use (trust >= 0.7) |
-| GET | /data-quality/summary/{symbol} | Get symbol quality summary (avg trust, unsafe days, issues) |
-| POST | /data-quality/reports/daily | Generate daily data quality report |
-| GET | /data-quality/alerts | List data quality alerts |
-| POST | /data-quality/alerts/{alert_id}/acknowledge | Acknowledge an alert |
-| GET | /data-quality/trends/{symbol} | Get trust score trend over 30 days |
-| GET | /data-quality/freshness/{symbol}/{date} | Check data freshness (last update vs expected) |
-| GET | /data-quality/system-mode | Get system mode (NORMAL / DEGRADED / SAFE_MODE) |
-| GET | /data-quality/cross-validate/{symbol}/{date} | Cross-validate price across active data sources |
-| GET | /data-quality/source-accuracy/{source_id} | Get accuracy score for a data source |
-| GET | /data-quality/weighted-price/{symbol}/{date} | Get source-weighted average price |
-| GET | /data-quality/source-drift/{source_id} | Detect drift in a data source's record volume |
-| GET | /data-quality/mode-history | Get system mode history |
-| POST | /data-quality/sources/recover-blacklisted | Attempt to recover blacklisted sources |
-| POST | /data-quality/trust/apply-decay | Apply time-based decay to old trust scores |
+| Method | Endpoint                                     | Description                                                 |
+| ------ | -------------------------------------------- | ----------------------------------------------------------- |
+| GET    | /health                                      | Health check (status, environment, version, scope)          |
+| POST   | /auth/register                               | Register a new user                                         |
+| POST   | /auth/login                                  | Login and receive access token                              |
+| GET    | /market/prices                               | List price data with optional symbol filter                 |
+| POST   | /market/ingest                               | Ingest a single price record for a stock                    |
+| POST   | /market/ingest/batch                         | Batch ingest OHLCV data for a date range                    |
+| POST   | /features/generate                           | Compute features for a single symbol/date                   |
+| POST   | /features/generate-batch                     | Compute features for a date range (single symbol)           |
+| POST   | /features/generate-multi                     | Compute features across multiple symbols                    |
+| GET    | /data-quality/trust/{symbol}/{date}          | Get trust score and quality details                         |
+| GET    | /data-quality/safe/{symbol}/{date}           | Check if data is safe to use (trust >= 0.7)                 |
+| GET    | /data-quality/summary/{symbol}               | Get symbol quality summary (avg trust, unsafe days, issues) |
+| POST   | /data-quality/reports/daily                  | Generate daily data quality report                          |
+| GET    | /data-quality/alerts                         | List data quality alerts                                    |
+| POST   | /data-quality/alerts/{alert_id}/acknowledge  | Acknowledge an alert                                        |
+| GET    | /data-quality/trends/{symbol}                | Get trust score trend over 30 days                          |
+| GET    | /data-quality/freshness/{symbol}/{date}      | Check data freshness (last update vs expected)              |
+| GET    | /data-quality/system-mode                    | Get system mode (NORMAL / DEGRADED / SAFE_MODE)             |
+| GET    | /data-quality/cross-validate/{symbol}/{date} | Cross-validate price across active data sources             |
+| GET    | /data-quality/source-accuracy/{source_id}    | Get accuracy score for a data source                        |
+| GET    | /data-quality/weighted-price/{symbol}/{date} | Get source-weighted average price                           |
+| GET    | /data-quality/source-drift/{source_id}       | Detect drift in a data source's record volume               |
+| GET    | /data-quality/mode-history                   | Get system mode history                                     |
+| POST   | /data-quality/sources/recover-blacklisted    | Attempt to recover blacklisted sources                      |
+| POST   | /data-quality/trust/apply-decay              | Apply time-based decay to old trust scores                  |
 
 ## Local Setup
 

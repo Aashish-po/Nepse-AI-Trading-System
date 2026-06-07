@@ -5,6 +5,7 @@ from backend.app.api.routes.data_quality import router as data_quality_router
 from backend.app.api.routes.features import router as features_router
 from backend.app.api.routes.health import router as health_router
 from backend.app.api.routes.market import router as market_router
+from backend.app.api.routes.ml import router as ml_router
 from backend.app.core.config import settings
 from backend.app.core.logging import configure_logging
 
@@ -21,6 +22,7 @@ def create_app() -> FastAPI:
     app.include_router(market_router)
     app.include_router(data_quality_router)
     app.include_router(features_router)
+    app.include_router(ml_router)
     return app
 
 

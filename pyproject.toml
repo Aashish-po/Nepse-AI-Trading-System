@@ -87,6 +87,7 @@ indent-style = "space"
 
 # Tests can be flexible
 "tests/*" = ["ARG", "S101"]
+"backend/tests/*" = ["ARG", "S101"]
 
 # Ignore noise in migrations
 "migrations/*" = ["E501", "F401"]

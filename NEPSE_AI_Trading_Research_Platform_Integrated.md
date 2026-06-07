@@ -360,16 +360,16 @@ backend/
 
 ### 6.2 Service Responsibilities
 
-| Service | Responsibility |
-|---|---|
-| Authentication Service | User authentication, JWT handling, and RBAC enforcement |
-| Market Data Service | Ingestion, retrieval, validation, and normalization of market data |
-| Feature Service | Feature computation, storage, and retrieval |
-| Signal Service | Signal generation, fusion, confidence scoring, and explanation linking |
-| Portfolio Service | Portfolio allocation, exposure tracking, and risk-aware optimization |
-| Backtest Service | Historical simulation, metrics generation, and scenario testing |
-| ML Service | Model training, inference, registration, and lifecycle integration |
-| Monitoring Service | Metrics, model drift, infrastructure health, and alerting |
+| Service                | Responsibility                                                         |
+| ---------------------- | ---------------------------------------------------------------------- |
+| Authentication Service | User authentication, JWT handling, and RBAC enforcement                |
+| Market Data Service    | Ingestion, retrieval, validation, and normalization of market data     |
+| Feature Service        | Feature computation, storage, and retrieval                            |
+| Signal Service         | Signal generation, fusion, confidence scoring, and explanation linking |
+| Portfolio Service      | Portfolio allocation, exposure tracking, and risk-aware optimization   |
+| Backtest Service       | Historical simulation, metrics generation, and scenario testing        |
+| ML Service             | Model training, inference, registration, and lifecycle integration     |
+| Monitoring Service     | Metrics, model drift, infrastructure health, and alerting              |
 
 ---
 
@@ -815,13 +815,13 @@ score = (
 
 ### 12.3 Signal Mapping
 
-| Score Range | Signal | Interpretation |
-|---:|---|---|
-| `>= 0.70` | BUY | Strong positive model consensus |
-| `0.55 to 0.69` | WEAK_BUY | Moderate positive signal |
-| `0.45 to 0.54` | HOLD | No strong directional edge |
-| `0.30 to 0.44` | WEAK_SELL | Moderate negative signal |
-| `< 0.30` | SELL | Strong negative model consensus |
+|    Score Range | Signal    | Interpretation                  |
+| -------------: | --------- | ------------------------------- |
+|      `>= 0.70` | BUY       | Strong positive model consensus |
+| `0.55 to 0.69` | WEAK_BUY  | Moderate positive signal        |
+| `0.45 to 0.54` | HOLD      | No strong directional edge      |
+| `0.30 to 0.44` | WEAK_SELL | Moderate negative signal        |
+|       `< 0.30` | SELL      | Strong negative model consensus |
 
 ### 12.4 Fusion Requirements
 
@@ -1079,17 +1079,17 @@ def run_backtest(config: dict):
 
 ### 18.3 Recommended API Domains
 
-| Domain | Example Endpoints |
-|---|---|
-| Health | `GET /health` |
-| Auth | `POST /auth/login`, `POST /auth/refresh` |
-| Market Data | `GET /market/prices`, `POST /market/ingest` |
-| Features | `GET /features/{symbol}` |
-| Signals | `GET /signals`, `GET /signals/{symbol}` |
-| Portfolio | `GET /portfolio`, `POST /portfolio/rebalance` |
-| Backtesting | `POST /backtests`, `GET /backtests/{id}` |
-| Models | `GET /models`, `POST /models/train` |
-| Monitoring | `GET /metrics`, `GET /drift` |
+| Domain      | Example Endpoints                             |
+| ----------- | --------------------------------------------- |
+| Health      | `GET /health`                                 |
+| Auth        | `POST /auth/login`, `POST /auth/refresh`      |
+| Market Data | `GET /market/prices`, `POST /market/ingest`   |
+| Features    | `GET /features/{symbol}`                      |
+| Signals     | `GET /signals`, `GET /signals/{symbol}`       |
+| Portfolio   | `GET /portfolio`, `POST /portfolio/rebalance` |
+| Backtesting | `POST /backtests`, `GET /backtests/{id}`      |
+| Models      | `GET /models`, `POST /models/train`           |
+| Monitoring  | `GET /metrics`, `GET /drift`                  |
 
 ---
 
@@ -1355,23 +1355,23 @@ Each production model should include:
 
 ### 24.1 Sizing Options
 
-| Tier | CPU | RAM | GPU | Recommended Use |
-|---|---:|---:|---|---|
-| Student Prototype | 4–6 cores | 16 GB | Optional | Learning, proof of concept |
-| Starter | 8 cores | 32 GB | RTX 4060 | Small-scale research |
-| Research | 16 cores | 64 GB | RTX 4070 / RTX 4090 | Model training and experimentation |
-| Production | 32+ cores | 64–256 GB | Multiple GPUs | Production-grade research platform |
-| Enterprise | 64+ cores | 256 GB | 4× A100 or equivalent | Institutional-scale training and serving |
+| Tier              |       CPU |       RAM | GPU                   | Recommended Use                          |
+| ----------------- | --------: | --------: | --------------------- | ---------------------------------------- |
+| Student Prototype | 4–6 cores |     16 GB | Optional              | Learning, proof of concept               |
+| Starter           |   8 cores |     32 GB | RTX 4060              | Small-scale research                     |
+| Research          |  16 cores |     64 GB | RTX 4070 / RTX 4090   | Model training and experimentation       |
+| Production        | 32+ cores | 64–256 GB | Multiple GPUs         | Production-grade research platform       |
+| Enterprise        | 64+ cores |    256 GB | 4× A100 or equivalent | Institutional-scale training and serving |
 
 ### 24.2 Budget Estimates
 
-| Tier | Estimated Cost |
-|---|---:|
-| Student Prototype | USD 0–50/month |
-| Starter Workstation | USD 1,500–2,500 one-time |
-| Research Server | USD 4,000–8,000 one-time or USD 100–300/month cloud |
-| Institutional Scale | USD 1,000+/month cloud |
-| Enterprise Cluster | USD 50,000+ one-time or equivalent managed cloud cost |
+| Tier                |                                        Estimated Cost |
+| ------------------- | ----------------------------------------------------: |
+| Student Prototype   |                                        USD 0–50/month |
+| Starter Workstation |                              USD 1,500–2,500 one-time |
+| Research Server     |   USD 4,000–8,000 one-time or USD 100–300/month cloud |
+| Institutional Scale |                                USD 1,000+/month cloud |
+| Enterprise Cluster  | USD 50,000+ one-time or equivalent managed cloud cost |
 
 ---
 
@@ -1379,20 +1379,20 @@ Each production model should include:
 
 ### 25.1 Sprint Plan
 
-| Sprint | Focus Area | Key Deliverables |
-|---:|---|---|
-| 1 | Data Ingestion | Scrapers/API clients, raw data landing, validation rules |
-| 2 | Database | PostgreSQL schema, indexes, migrations, TimescaleDB setup |
-| 3 | Indicators | Technical indicators, feature store, feature validation |
-| 4 | LSTM | Forecasting model, training pipeline, evaluation metrics |
-| 5 | Dashboard | Market overview, signal viewer, basic analytics |
-| 6 | Sentiment | XLM-R pipeline, news ingestion, sentiment scoring |
-| 7 | Reinforcement Learning | PPO and DQN environments, reward functions, simulations |
-| 8 | GNN | Graph construction, relationship modeling, GCN prototype |
-| 9 | Explainability | SHAP integration, signal attribution, dashboard explanations |
-| 10 | Meta-Learning | Auto retraining, model selection, hyperparameter evolution |
-| 11 | MLOps | MLflow tracking, model registry, deployment workflows |
-| 12 | Production Deployment | Docker/Kubernetes, monitoring, backups, production checklist |
+| Sprint | Focus Area             | Key Deliverables                                             |
+| -----: | ---------------------- | ------------------------------------------------------------ |
+|      1 | Data Ingestion         | Scrapers/API clients, raw data landing, validation rules     |
+|      2 | Database               | PostgreSQL schema, indexes, migrations, TimescaleDB setup    |
+|      3 | Indicators             | Technical indicators, feature store, feature validation      |
+|      4 | LSTM                   | Forecasting model, training pipeline, evaluation metrics     |
+|      5 | Dashboard              | Market overview, signal viewer, basic analytics              |
+|      6 | Sentiment              | XLM-R pipeline, news ingestion, sentiment scoring            |
+|      7 | Reinforcement Learning | PPO and DQN environments, reward functions, simulations      |
+|      8 | GNN                    | Graph construction, relationship modeling, GCN prototype     |
+|      9 | Explainability         | SHAP integration, signal attribution, dashboard explanations |
+|     10 | Meta-Learning          | Auto retraining, model selection, hyperparameter evolution   |
+|     11 | MLOps                  | MLflow tracking, model registry, deployment workflows        |
+|     12 | Production Deployment  | Docker/Kubernetes, monitoring, backups, production checklist |
 
 ### 25.2 End-to-End Implementation Flow
 
