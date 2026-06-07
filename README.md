@@ -1,6 +1,6 @@
 # NEPSE AI Trading Research Platform
 
-Private research and decision-support platform for NEPSE market data, quantitative research, AI/ML, realistic backtesting, risk-aware portfolio analysis, and signal exploration.
+Private research and decision-support platform for NEPSE market data, quantitative research, data quality assurance, realistic backtesting, and signal exploration.
 
 This project is research-only. It does not provide financial advice, guarantee profit, or execute live trades.
 
@@ -8,23 +8,21 @@ This project is research-only. It does not provide financial advice, guarantee p
 
 ```text
 Data Sources → Ingestion → Validation → Database → Feature Engineering
-  → Quant Research → AI Models → Signal Fusion → Risk Engine
-  → Portfolio Optimization → Backtesting / Evaluation → Dashboard / API / Alerts
+  → Data Quality → Trust Scoring → Backtesting → Dashboard / API / Alerts
 ```
 
 | Layer | Purpose |
 |---|---|
-| Data Platform | Market data, corporate actions, news, economic indicators |
-| Quant Research | Technical analysis, statistical models, factor models, regime detection |
-| AI / ML | LSTM forecasting, sentiment (XLM-R), RL (PPO/DQN/HRL), GNNs, ensembles |
-| Signal Fusion | Combines model outputs into unified trade signals with confidence scoring |
-| Risk Engine | Position sizing, exposure limits, drawdown protection, daily loss limits |
-| Portfolio | Mean-variance, risk parity, sector-constrained optimization |
-| Evaluation | Backtesting, walk-forward, Monte Carlo, stress testing, benchmarking |
-| Explainability | SHAP, feature importance, signal attribution, trade explanations |
-| MLOps | MLflow tracking, model registry, auto-retraining, drift monitoring |
-| Infrastructure | FastAPI, PostgreSQL/TimescaleDB, Redis, Docker, Kubernetes |
-| UI | Streamlit dashboard, research workbench, Telegram / email / webhook alerts |
+| Data Platform | NEPSE OHLCV ingestion, corporate actions, news, economic indicators |
+| Data Quality | Trust scores, source accuracy, freshness checks, drift detection, safe mode |
+| Feature Engineering | Technical indicators, rolling statistics, regime labels, feature validation |
+| Backtesting | Realistic simulation with fees, slippage, liquidity filters, partial fills |
+| Strategy Registry | Versioned strategies, benchmark comparison, strategy evaluation |
+| Portfolio Simulation | Account simulation, position tracking, equity curves, allocation |
+| Explainability | Signal attribution, trade explanations, audit logs |
+| MLOps | MLflow tracking, model registry, experiment logging |
+| Infrastructure | FastAPI, PostgreSQL/TimescaleDB, Redis, Docker Compose |
+| UI | Streamlit dashboard, research workbench, alerts | |
 
 ## MVP Stack
 
@@ -71,15 +69,35 @@ backend/
       routes/
         auth.py               # Authentication endpoints (register / login)
         health.py             # Health check endpoint
-        market.py             # Market data endpoints
-        data_quality.py       # Data quality endpoints
-        features.py           # Feature generation endpoints
+        market.py             # Market data endpoints (prices, ingest, batch ingest)
+        data_quality.py       # Data quality endpoints (trust, safety, alerts, reports)
+        features.py           # Feature generation endpoints (single, batch, multi-stock)
     core/
       config.py               # Application configuration
       logging.py              # Logging configuration
     models/                   # SQLAlchemy ORM models
+      stock.py                # Stock / symbol metadata
+      price.py                # Price data
+      feature.py              # Computed features
+      data_quality.py         # Trust scores, alerts, reports, holiday calendar, events
+      data_source.py          # Data sources and ingestion logs
+      strategy.py             # Strategy registry
+      signal.py               # Trade signals
+      backtest.py             # Backtest results
+      portfolio_snapshot.py   # Portfolio snapshots
+      dataset.py              # Datasets
+      model_registry.py       # ML models
+      trade.py                # Trade logs
+      user.py                 # Users and RBAC
     schemas/                  # Pydantic schemas
     services/                 # Business logic layer
+      feature.py              # Feature computation (RSI, MACD, EMA, ATR, returns, etc.)
+      data_quality.py         # Trust scoring, system mode, source accuracy, drift detection
+      data_quality_gate.py    # Data quality gating for features and backtesting
+      backtest.py             # Backtest execution with data quality enforcement
+      ingestion.py            # Data ingestion service
+      market.py               # Market data service
+      auth.py                 # Authentication service
     db/                       # Database session + Alembic migrations
   tests/                      # pytest test suite
 ```
@@ -88,21 +106,31 @@ backend/
 
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | /health | Health check endpoint |
+| GET | /health | Health check (status, environment, version, scope) |
 | POST | /auth/register | Register a new user |
 | POST | /auth/login | Login and receive access token |
-| GET | /market/prices | List price data (optional symbol filter) |
-| POST | /market/ingest | Ingest market price data for a stock |
-| POST | /market/ingest/batch | Batch ingest market price data |
+| GET | /market/prices | List price data with optional symbol filter |
+| POST | /market/ingest | Ingest a single price record for a stock |
+| POST | /market/ingest/batch | Batch ingest OHLCV data for a date range |
 | POST | /features/generate | Compute features for a single symbol/date |
-| POST | /features/generate-batch | Compute features for a date range |
+| POST | /features/generate-batch | Compute features for a date range (single symbol) |
 | POST | /features/generate-multi | Compute features across multiple symbols |
-| GET | /data-quality/trust/{symbol}/{date} | Get trust score for symbol/date |
-| GET | /data-quality/safe/{symbol}/{date} | Check if data is safe to use |
-| GET | /data-quality/summary/{symbol} | Get symbol quality summary |
+| GET | /data-quality/trust/{symbol}/{date} | Get trust score and quality details |
+| GET | /data-quality/safe/{symbol}/{date} | Check if data is safe to use (trust >= 0.7) |
+| GET | /data-quality/summary/{symbol} | Get symbol quality summary (avg trust, unsafe days, issues) |
 | POST | /data-quality/reports/daily | Generate daily data quality report |
-| GET | /data-quality/alerts | Get data quality alerts |
+| GET | /data-quality/alerts | List data quality alerts |
 | POST | /data-quality/alerts/{alert_id}/acknowledge | Acknowledge an alert |
+| GET | /data-quality/trends/{symbol} | Get trust score trend over 30 days |
+| GET | /data-quality/freshness/{symbol}/{date} | Check data freshness (last update vs expected) |
+| GET | /data-quality/system-mode | Get system mode (NORMAL / DEGRADED / SAFE_MODE) |
+| GET | /data-quality/cross-validate/{symbol}/{date} | Cross-validate price across active data sources |
+| GET | /data-quality/source-accuracy/{source_id} | Get accuracy score for a data source |
+| GET | /data-quality/weighted-price/{symbol}/{date} | Get source-weighted average price |
+| GET | /data-quality/source-drift/{source_id} | Detect drift in a data source's record volume |
+| GET | /data-quality/mode-history | Get system mode history |
+| POST | /data-quality/sources/recover-blacklisted | Attempt to recover blacklisted sources |
+| POST | /data-quality/trust/apply-decay | Apply time-based decay to old trust scores |
 
 ## Local Setup
 
