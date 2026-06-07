@@ -16,7 +16,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from backend.app.db.session import SessionLocal
-from backend.app.models.data_quality import DataTrust, SourceCorrelation
+from backend.app.models.data_quality import DataTrust
 from backend.app.models.feature import Feature
 from backend.app.models.price import Price
 from backend.app.models.stock import Stock
@@ -25,7 +25,58 @@ from backend.app.services.data_quality_gate import DataQualityGate, DataQualityG
 
 logger = logging.getLogger(__name__)
 
-FEATURE_VERSION = "v2.0.0-trust_aware"
+FEATURE_VERSION = "v4.0.0"
+
+STANDARD_EVENT_TYPES = frozenset(
+    {
+        "volatility_spike",
+        "macro_news",
+        "earnings",
+        "corporate_action",
+        "market_halt",
+        "dividend",
+        "ipo",
+        "regulatory",
+        "index_rebalance",
+        "derivatives_expiry",
+    }
+)
+
+EVENT_TYPE_ALIASES: dict[str, str] = {
+    "volatility": "volatility_spike",
+    "high_volatility": "volatility_spike",
+    "high-volatility": "volatility_spike",
+    "vol_spike": "volatility_spike",
+    "macro": "macro_news",
+    "macroeconomic": "macro_news",
+    "economic_news": "macro_news",
+    "earnings_report": "earnings",
+    "corp_action": "corporate_action",
+    "dividend_declaration": "dividend",
+    "reg": "regulatory",
+    "regulation": "regulatory",
+    "derivatives": "derivatives_expiry",
+    "f&o_expiry": "derivatives_expiry",
+    "index": "index_rebalance",
+}
+
+FEATURE_REGISTRY: dict[str, dict[str, Any]] = {
+    "rsi_14": {"group": "momentum", "base_weight": 1.0},
+    "rsi_21": {"group": "momentum", "base_weight": 1.0},
+    "macd": {"group": "trend", "base_weight": 0.9},
+    "macd_signal": {"group": "trend", "base_weight": 0.8},
+    "macd_hist": {"group": "trend", "base_weight": 0.7},
+    "atr_14": {"group": "volatility", "base_weight": 0.8},
+    "sma_20": {"group": "trend", "base_weight": 0.9},
+    "sma_50": {"group": "trend", "base_weight": 0.9},
+    "ema_20": {"group": "trend", "base_weight": 0.9},
+    "ema_50": {"group": "trend", "base_weight": 0.9},
+    "returns": {"group": "momentum", "base_weight": 0.8},
+    "volatility_20": {"group": "volatility", "base_weight": 0.8},
+    "volume_sma_20": {"group": "volume", "base_weight": 0.7},
+    "volume_ratio": {"group": "volume", "base_weight": 0.7},
+    "price_range": {"group": "volatility", "base_weight": 0.8},
+}
 
 
 class FeatureService:
@@ -160,18 +211,93 @@ class FeatureService:
             trust_versions = [r["trust_version"] for r in gate_results if r["safe"]]
             features_df = self._compute_all_features(safe_df)
 
-            correlation_penalty = self._apply_correlation_penalty(symbol, sess)
+            feature_corr_penalties = self._compute_feature_correlations(features_df)
+
             confidences: list[float | None] = []
+            confidence_adjustments_list: list[dict[str, Any] | None] = []
+            event_types_list: list[dict[str, Any] | None] = []
+            correlation_penalties_per_row: list[float | None] = []
+
             for i, (_, row) in enumerate(features_df.iterrows()):
                 if i < len(trust_scores):
+                    date_str = row["date"].strftime("%Y-%m-%d")
+                    event_result = self._apply_event_overrides(symbol, date_str, sess)
+                    event_multiplier = event_result["multiplier"]
+                    event_types = event_result["event_types"]
+
+                    trust_score = trust_scores[i]
+                    feature_weight = feature_weights[i]
+
+                    adjusted_trust = (
+                        trust_score * event_multiplier if trust_score is not None else None
+                    )
+
+                    raw_features = {str(k): v for k, v in row.drop("date").items()}
+                    row_corr_penalties: dict[str, float] = {}
+
+                    for feat_name, feat_val in raw_features.items():
+                        corr_pen = feature_corr_penalties.get(feat_name, 1.0)
+                        row_corr_penalties[feat_name] = corr_pen
+                        if feat_val is not None and not (
+                            isinstance(feat_val, float) and np.isnan(feat_val)
+                        ):
+                            raw_features[feat_name] = feat_val * corr_pen
+
                     scaled_features, confidence = self._apply_trust_scaling(
-                        {str(k): v for k, v in row.drop("date").items()},
-                        trust_scores[i],
-                        feature_weights[i] * correlation_penalty,
+                        raw_features, adjusted_trust, feature_weight
                     )
                     confidences.append(confidence)
                     for k, v in scaled_features.items():
                         features_df.iat[i, features_df.columns.get_loc(k)] = v  # type: ignore[index]
+
+                    if trust_score is not None and feature_weight > 0 and event_multiplier < 1.0:
+                        event_types_list.append(
+                            {
+                                "event_types": event_types,
+                                "event_multiplier": event_multiplier,
+                                "original_trust": trust_score,
+                                "adjusted_trust": adjusted_trust,
+                            }
+                        )
+                    elif len(event_types) > 0:
+                        event_types_list.append(
+                            {
+                                "event_types": event_types,
+                                "event_multiplier": event_multiplier,
+                                "original_trust": trust_score,
+                                "adjusted_trust": adjusted_trust,
+                            }
+                        )
+                    else:
+                        event_types_list.append(None)
+
+                    avg_corr_penalty = (
+                        float(np.mean(list(row_corr_penalties.values())))
+                        if row_corr_penalties
+                        else 1.0
+                    )
+                    correlation_penalties_per_row.append(avg_corr_penalty)
+
+                    if confidence is not None:
+                        trust_factor = (
+                            adjusted_trust * feature_weight if adjusted_trust is not None else 0.0
+                        )
+                        confidence_adjustments_list.append(
+                            {
+                                "raw_confidence": 1.0,
+                                "event_multiplier": round(event_multiplier, 4),
+                                "correlation_multiplier": round(avg_corr_penalty, 4),
+                                "trust_multiplier": round(trust_factor, 4),
+                                "final_confidence": round(confidence, 4),
+                                "deltas": {
+                                    "event": round(event_multiplier - 1.0, 4),
+                                    "correlation": round(avg_corr_penalty - 1.0, 4),
+                                    "trust_scale": round(trust_factor - 1.0, 4),
+                                },
+                            }
+                        )
+                    else:
+                        confidence_adjustments_list.append(None)
 
             inserted_count = self._bulk_persist_features(
                 features_df,
@@ -180,7 +306,9 @@ class FeatureService:
                 trust_versions,
                 feature_weights,
                 confidences,
-                correlation_penalty,
+                event_types_list,
+                correlation_penalties_per_row,
+                confidence_adjustments_list,
                 session=sess,
             )
 
@@ -290,32 +418,56 @@ class FeatureService:
                 scaled[k] = v
         return scaled, confidence
 
-    def _apply_event_overrides(self, symbol: str, date_str: str) -> float:
-        sess = self._get_session()
-        owns_session = self._session is None
+    def _apply_event_overrides(
+        self, symbol: str, date_str: str, session: Session | None = None
+    ) -> dict[str, Any]:
+        sess = session or self._get_session()
+        owns_session = session is None and self._session is None
         try:
             dq = DataQualityService(session=sess)
             overrides = dq.get_active_event_overrides(date_str, symbol)
             multiplier = 1.0
+            event_types: list[str] = []
             for o in overrides:
                 multiplier *= o["sensitivity_multiplier"]
-            return max(0.0, min(1.0, multiplier))
+                event_types.append(self._normalize_event_type(o.get("event_type", "")))
+            return {
+                "multiplier": max(0.0, min(1.0, multiplier)),
+                "event_types": event_types,
+            }
         finally:
             if owns_session:
                 sess.close()
 
-    def _apply_correlation_penalty(self, symbol: str, session: Session | None = None) -> float:
-        sess = session or self._get_session()
-        owns_session = session is None and self._session is None
-        try:
-            correlations = sess.scalars(sa.select(SourceCorrelation)).all()
-            for corr in correlations:
-                if corr.correlation_score > 0.8:
-                    return 0.9
-            return 1.0
-        finally:
-            if owns_session:
-                sess.close()
+    def _normalize_event_type(self, raw: str) -> str:
+        normalized = EVENT_TYPE_ALIASES.get(raw.lower(), raw.lower())
+        if normalized in STANDARD_EVENT_TYPES:
+            return normalized
+        logger.warning("Unrecognized event type '%s', defaulting to 'macro_news'", raw)
+        return "macro_news"
+
+    def _correlation_penalty_func(self, max_corr: float) -> float:
+        alpha = 0.22
+        penalty = 1.0 - alpha * max_corr ** 2
+        return max(0.5, penalty)
+
+    def _compute_feature_correlations(self, features_df: pd.DataFrame) -> dict[str, float]:
+        feature_columns = [c for c in features_df.columns if c != "date" and c != "day_index"]
+        if len(feature_columns) < 2:
+            return {col: 1.0 for col in feature_columns}
+
+        corr_matrix = features_df[feature_columns].corr(method="pearson").abs()
+        penalties: dict[str, float] = {}
+        for col in feature_columns:
+            others = [c for c in feature_columns if c != col]
+            if others:
+                max_corr = float(corr_matrix[others].loc[col].max())  # type: ignore[arg-type]
+                if np.isnan(max_corr):
+                    max_corr = 0.0
+            else:
+                max_corr = 0.0
+            penalties[col] = self._correlation_penalty_func(max_corr)
+        return penalties
 
     def _compute_all_features(self, df: pd.DataFrame) -> pd.DataFrame:
         close = self._to_array(df["close"])
@@ -511,6 +663,7 @@ class FeatureService:
                 raise ValueError(f"Could not build dataframe for {date_str}")
 
             features_df = self._compute_all_features(df)
+            feature_corr_penalties = self._compute_feature_correlations(features_df)
 
             target_date = pd.to_datetime(date_str)
             feature_row = features_df[features_df["date"] == target_date]
@@ -520,8 +673,9 @@ class FeatureService:
             trust_score = None
             trust_version = "v1"
             feature_weight = 1.0
-            correlation_penalty = 1.0
             confidence = None
+            event_multiplier = 1.0
+            event_types: list[str] = []
 
             try:
                 gate = DataQualityGate(session=session)
@@ -529,21 +683,59 @@ class FeatureService:
                 trust_score = gate_result.trust_score if gate_result.safe else None
                 trust_version = self._get_trust_version_for_date(symbol, date_str, session)
                 feature_weight = gate.get_feature_weight(symbol, date_str)
-                correlation_penalty = self._apply_correlation_penalty(symbol, session)
             except Exception:
                 pass
 
-            if trust_score is not None and feature_weight > 0:
-                confidence = max(0.0, min(1.0, trust_score * feature_weight * correlation_penalty))
+            event_result = self._apply_event_overrides(symbol, date_str, session)
+            event_multiplier = event_result["multiplier"]
+            event_types = event_result["event_types"]
+
+            adjusted_trust = trust_score * event_multiplier if trust_score is not None else None
 
             features = feature_row.iloc[0].drop("date").to_dict()
+            row_corr_penalties: dict[str, float] = {}
+            for feat_name, feat_val in features.items():
+                corr_pen = feature_corr_penalties.get(str(feat_name), 1.0)
+                row_corr_penalties[str(feat_name)] = corr_pen
+                if not np.isnan(feat_val):
+                    features[feat_name] = feat_val * corr_pen
+
             clean_features: dict[str, float | None] = {
                 str(k): float(v) if not np.isnan(v) else None for k, v in features.items()
             }
 
-            scaled_features, _ = self._apply_trust_scaling(
-                clean_features, trust_score, feature_weight * correlation_penalty
+            scaled_features, confidence = self._apply_trust_scaling(
+                clean_features, adjusted_trust, feature_weight
             )
+
+            avg_corr_penalty = (
+                float(np.mean(list(row_corr_penalties.values()))) if row_corr_penalties else 1.0
+            )
+
+            confidence_adjustments = None
+            if confidence is not None:
+                trust_factor = adjusted_trust * feature_weight if adjusted_trust is not None else 0.0
+                confidence_adjustments = {
+                    "raw_confidence": 1.0,
+                    "event_multiplier": round(event_multiplier, 4),
+                    "correlation_multiplier": round(avg_corr_penalty, 4),
+                    "trust_multiplier": round(trust_factor, 4),
+                    "final_confidence": round(confidence, 4),
+                    "deltas": {
+                        "event": round(event_multiplier - 1.0, 4),
+                        "correlation": round(avg_corr_penalty - 1.0, 4),
+                        "trust_scale": round(trust_factor - 1.0, 4),
+                    },
+                }
+
+            event_info_for_persist = None
+            if event_types:
+                event_info_for_persist = {
+                    "event_types": event_types,
+                    "event_multiplier": event_multiplier,
+                    "original_trust": trust_score,
+                    "adjusted_trust": adjusted_trust,
+                }
 
             self._persist_single_feature(
                 symbol,
@@ -552,8 +744,10 @@ class FeatureService:
                 trust_score,
                 trust_version,
                 feature_weight,
-                correlation_penalty,
+                avg_corr_penalty,
                 confidence,
+                event_info_for_persist,
+                confidence_adjustments,
             )
 
             return {
@@ -576,6 +770,8 @@ class FeatureService:
         feature_weight: float | None = None,
         correlation_penalty: float = 1.0,
         confidence: float | None = None,
+        event_info: dict[str, Any] | None = None,
+        confidence_adjustments: dict[str, Any] | None = None,
     ) -> None:
         session = self._get_session()
         owns_session = self._session is None
@@ -591,17 +787,26 @@ class FeatureService:
                 feature_weight = gate.get_feature_weight(symbol, date_str)
 
             if confidence is None and trust_score is not None and feature_weight > 0:
-                confidence = max(0.0, min(1.0, trust_score * feature_weight * correlation_penalty))
+                confidence = max(0.0, min(1.0, trust_score * feature_weight))
+
+            has_event_override = bool(event_info is not None and event_info.get("event_types"))
 
             features_meta = {
                 "trust_score": trust_score,
                 "feature_weight": feature_weight,
                 "confidence_raw": confidence,
                 "correlation_penalty": correlation_penalty,
-                "event_override": False,
+                "event_override": {
+                    "active": has_event_override,
+                    "event_types": event_info.get("event_types") if event_info else [],
+                    "event_multiplier": event_info.get("event_multiplier") if event_info else 1.0,
+                    "original_trust": event_info.get("original_trust") if event_info else None,
+                    "adjusted_trust": event_info.get("adjusted_trust") if event_info else None,
+                },
+                "confidence_adjustments": confidence_adjustments,
                 "version": self._feature_version,
                 "scaled_by_trust": trust_score is not None,
-                "event_adjusted": False,
+                "event_adjusted": has_event_override,
                 "correlation_penalized": correlation_penalty < 1.0,
             }
 
@@ -632,7 +837,9 @@ class FeatureService:
         trust_versions: list[str] | None = None,
         feature_weights: list[float] | None = None,
         confidences: list[float | None] | None = None,
-        correlation_penalty: float = 1.0,
+        event_infos: list[dict[str, Any] | None] | None = None,
+        correlation_penalties: list[float | None] | None = None,
+        confidence_adjustments_list: list[dict[str, Any] | None] | None = None,
         session: Session | None = None,
     ) -> int:
         sess = session or self._get_session()
@@ -651,17 +858,43 @@ class FeatureService:
                     feature_weights[idx] if feature_weights and idx < len(feature_weights) else None
                 )
                 confidence = confidences[idx] if confidences and idx < len(confidences) else None
+                event_info = (
+                    event_infos[idx]
+                    if event_infos and idx < len(event_infos) and event_infos[idx]
+                    else None
+                )
+                corr_pen = (
+                    correlation_penalties[idx]
+                    if correlation_penalties and idx < len(correlation_penalties)
+                    else 1.0
+                )
+                adj = (
+                    confidence_adjustments_list[idx]
+                    if confidence_adjustments_list
+                    and idx < len(confidence_adjustments_list)
+                    and confidence_adjustments_list[idx]
+                    else None
+                )
+
+                has_event_override = bool(event_info is not None and event_info.get("event_types"))
 
                 features_meta = {
                     "trust_score": trust,
                     "feature_weight": weight,
                     "confidence_raw": confidence,
-                    "correlation_penalty": correlation_penalty,
-                    "event_override": False,
+                    "correlation_penalty": corr_pen,
+                    "event_override": {
+                        "active": has_event_override,
+                        "event_types": event_info.get("event_types") if event_info else [],
+                        "event_multiplier": event_info.get("event_multiplier") if event_info else 1.0,
+                        "original_trust": event_info.get("original_trust") if event_info else None,
+                        "adjusted_trust": event_info.get("adjusted_trust") if event_info else None,
+                    },
+                    "confidence_adjustments": adj,
                     "version": self._feature_version,
                     "scaled_by_trust": trust is not None,
-                    "event_adjusted": False,
-                    "correlation_penalized": correlation_penalty < 1.0,
+                    "event_adjusted": has_event_override,
+                    "correlation_penalized": corr_pen is not None and corr_pen < 1.0,
                 }
 
                 features_to_insert.append(

@@ -54,6 +54,7 @@ def test_feature_batch_computes_indicators(db_session: Session) -> None:
 
     assert result["symbol"] == "NEPSE"
     assert result["processed_dates"] > 0
+    assert result["feature_version"] == "v4.0.0"
     assert "rsi_14" in result["features_computed"]
     assert "macd" in result["features_computed"]
     assert "atr_14" in result["features_computed"]
@@ -292,26 +293,61 @@ def test_insufficient_data_handling(db_session: Session) -> None:
     assert result["processed_dates"] == 0 or result["gated_dates"] > 0 or result["total_dates"] > 0
 
 
-def test_event_override_multiplier(db_session: Session) -> None:
+def test_event_override_returns_dict_with_types(db_session: Session) -> None:
     _seed_price_series(db_session, "EVENT_TEST", "2024-01-01", count=30)
 
     dq = DataQualityService(session=db_session)
     dq.create_event_override("EARNINGS", "2024-01-01", 0.8, "Test event", symbol="EVENT_TEST")
 
     service = FeatureService(session=db_session)
-    multiplier = service._apply_event_overrides("EVENT_TEST", "2024-01-01")
-    assert multiplier == 0.8
+    result = service._apply_event_overrides("EVENT_TEST", "2024-01-01")
+    assert isinstance(result, dict)
+    assert "multiplier" in result
+    assert "event_types" in result
+    assert result["multiplier"] == 0.8
+    assert result["event_types"] == ["earnings"]
 
 
-def test_correlation_penalty_returns_default(db_session: Session) -> None:
-    _seed_price_series(db_session, "CORR_TEST", "2024-01-01", count=30)
+def test_correlation_penalty_function_defaults() -> None:
+    service = FeatureService()
+    assert abs(service._correlation_penalty_func(0.0) - 1.0) < 1e-9
+    assert abs(service._correlation_penalty_func(0.5) - 0.945) < 0.01
+    assert abs(service._correlation_penalty_func(0.9) - 0.822) < 0.01
+    assert abs(service._correlation_penalty_func(0.95) - 0.801) < 0.01
+    assert abs(service._correlation_penalty_func(0.85) - 0.841) < 0.01
+    assert abs(service._correlation_penalty_func(0.65) - 0.907) < 0.01
 
-    service = FeatureService(session=db_session)
-    penalty = service._apply_correlation_penalty("CORR_TEST", db_session)
-    assert penalty == 1.0
+
+def test_feature_correlations_compute_per_feature_penalty() -> None:
+    service = FeatureService()
+    import pandas as pd
+
+    base = np.linspace(0, 10, 30)
+    rsi_vals = base + np.random.randn(30) * 0.5
+    rsi_vals2 = rsi_vals + np.random.randn(30) * 0.3
+    sma_vals = base + np.random.randn(30) * 3.0
+
+    df = pd.DataFrame(
+        {
+            "date": pd.date_range("2024-01-01", periods=30),
+            "rsi_14": rsi_vals,
+            "rsi_21": rsi_vals2,
+            "sma_20": sma_vals,
+        }
+    )
+    penalties = service._compute_feature_correlations(df)
+    assert "rsi_14" in penalties
+    assert "rsi_21" in penalties
+    assert "sma_20" in penalties
+    assert 0.0 < penalties["rsi_14"] <= 1.0
+    assert 0.0 < penalties["rsi_21"] <= 1.0
+    assert 0.0 < penalties["sma_20"] <= 1.0
+    assert not all(p == 1.0 for p in penalties.values())
 
 
 def test_trust_version_persisted_in_bulk(db_session: Session) -> None:
+    from sqlalchemy import func
+
     _seed_price_series(db_session, "TRUST_VER", "2024-01-01", count=30)
 
     service = FeatureService(session=db_session)
@@ -320,6 +356,7 @@ def test_trust_version_persisted_in_bulk(db_session: Session) -> None:
     feature = db_session.scalar(select(Feature).where(Feature.trust_version.is_not(None)))
     assert feature is not None
     assert feature.trust_version == "v1"
+    assert feature.feature_version == "v4.0.0"
 
 
 def test_confidence_field_bounded(db_session: Session) -> None:
@@ -342,12 +379,59 @@ def test_features_meta_includes_debug_info(db_session: Session) -> None:
     feature = db_session.scalar(select(Feature))
     assert feature is not None
     assert feature.features_meta is not None
-    assert "trust_score" in feature.features_meta
-    assert "feature_weight" in feature.features_meta
-    assert "correlation_penalty" in feature.features_meta
-    assert "confidence_raw" in feature.features_meta
-    assert "event_override" in feature.features_meta
-    assert "version" in feature.features_meta
+    meta = feature.features_meta
+    assert "trust_score" in meta
+    assert "feature_weight" in meta
+    assert "correlation_penalty" in meta
+    assert "confidence_raw" in meta
+    assert "event_override" in meta
+    assert isinstance(meta["event_override"], dict)
+    assert "active" in meta["event_override"]
+    assert "event_types" in meta["event_override"]
+    assert "confidence_adjustments" in meta
+    assert "version" in meta
+    assert meta["version"] == "v4.0.0"
+
+
+def test_transformation_order_event_correlation_trust(db_session: Session) -> None:
+    _seed_price_series(db_session, "ORDER_TEST", "2024-01-01", count=30)
+    dq = DataQualityService(session=db_session)
+    dq.create_event_override("EARNINGS", "2024-01-01", 0.8, "Test event", symbol="ORDER_TEST")
+
+    service = FeatureService(session=db_session)
+    result = service.compute_features_batch("ORDER_TEST")
+
+    assert result["processed_dates"] > 0
+    assert result["feature_version"] == "v4.0.0"
+
+    feature = db_session.scalar(select(Feature).where(Feature.stock_id == 1))
+    assert feature is not None
+    assert feature.feature_version == "v4.0.0"
+    assert feature.features_meta is not None
+    meta = feature.features_meta
+    assert meta["event_override"]["active"] is True
+    assert "earnings" in meta["event_override"]["event_types"]
+
+
+def test_confidence_decomposition_stored(db_session: Session) -> None:
+    _seed_price_series(db_session, "CONF_DECOMP", "2024-01-01", count=30)
+
+    service = FeatureService(session=db_session)
+    service.compute_features_batch("CONF_DECOMP")
+
+    feature = db_session.scalar(select(Feature).where(Feature.confidence.is_not(None)))
+    assert feature is not None
+    assert feature.features_meta is not None
+    meta = feature.features_meta
+    adj = meta.get("confidence_adjustments")
+    assert adj is not None
+    if adj:
+        assert "raw_confidence" in adj
+        assert "event_multiplier" in adj
+        assert "correlation_multiplier" in adj
+        assert "trust_multiplier" in adj
+        assert "final_confidence" in adj
+        assert "deltas" in adj
 
 
 def test_get_features_list_pagination(db_session: Session) -> None:
@@ -366,3 +450,28 @@ def test_get_features_list_pagination(db_session: Session) -> None:
     result2 = service.get_features_list("PAGINATE", limit=10, offset=10)
     assert len(result2["features"]) == 10
     assert result2["offset"] == 10
+
+
+def test_standardized_event_types(db_session: Session) -> None:
+    _seed_price_series(db_session, "STD_EVENT", "2024-01-01", count=30)
+    dq = DataQualityService(session=db_session)
+    dq.create_event_override("volatility", "2024-01-01", 0.8, "Vol alias test", symbol="STD_EVENT")
+
+    service = FeatureService(session=db_session)
+    service.compute_features_batch("STD_EVENT")
+
+    feature = db_session.scalar(select(Feature).where(Feature.stock_id == 1))
+    assert feature is not None
+    assert feature.features_meta is not None
+    event_types = feature.features_meta["event_override"]["event_types"]
+    assert "volatility_spike" in event_types
+
+
+def test_feature_registry_coverage(db_session: Session) -> None:
+    from backend.app.services.feature import FEATURE_REGISTRY
+
+    required_groups = {"momentum", "trend", "volatility", "volume"}
+    registered_groups = {entry["group"] for entry in FEATURE_REGISTRY.values()}
+    assert required_groups.issubset(registered_groups)
+    assert "rsi_14" in FEATURE_REGISTRY
+    assert "macd" in FEATURE_REGISTRY
