@@ -10,11 +10,11 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from backend.app.db.session import get_db
-from ml.dataset import DatasetBuilder
-from ml.evaluation import ModelEvaluator
-from ml.inference import Predictor
-from ml.labeling import LabelConfig
-from ml.training import ModelTrainer
+from backend.ml.dataset import DatasetBuilder
+from backend.ml.evaluation import ModelEvaluator
+from backend.ml.inference import Predictor
+from backend.ml.labeling import LabelConfig
+from backend.ml.training import ModelTrainer
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["ml"])

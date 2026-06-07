@@ -57,9 +57,8 @@ jobs:
       # ✅ ML module import smoke test
       - name: ML module import smoke check
         run: python -c "from backend.ml.risk_manager import RiskManager; rm = RiskManager(); print(rm.max_drawdown)"
-        env:          
+        env:
           PYTHONPATH: ${{ github.workspace }}
-
 
       - name: Cache pip
         uses: actions/cache@v4
@@ -68,4 +67,28 @@ jobs:
           key: ${{ runner.os }}-pip-${{ hashFiles('requirements-dev.txt') }}
           restore-keys: |
             ${{ runner.os }}-pip-
-              
+
+      - name: Run test
+        run: |
+          export PYTHONPATH=$(pwd)
+          python -c "from ml.risk_management import RiskManager; rm = RiskManager(); print(rm.max_drawdown)"
+
+      - name: Run test
+        run: |
+          export PYTHONPATH=$(pwd)
+          python -c "from app.main import app; print(app.title)"
+
+      - name: Run test
+        run: |
+          export PYTHONPATH=$(pwd)
+          pytest
+
+      - name: Run test
+        run: |
+          export PYTHONPATH=$(pwd)
+          ruff check . --fix
+
+      - name: Run test
+        run: |
+          export PYTHONPATH=$(pwd)
+          ruff format --check .

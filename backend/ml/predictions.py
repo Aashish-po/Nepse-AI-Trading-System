@@ -36,7 +36,7 @@ class MLModelAdapter(ModelAdapter):
     def __init__(self, model_name: str, model_version: str, model_dir: str | None = None) -> None:
         from pathlib import Path
 
-        from ml.inference import Predictor
+        from backend.ml.inference import Predictor
 
         self._predictor = Predictor(
             model_name=model_name,
