@@ -448,7 +448,7 @@ class FeatureService:
 
     def _correlation_penalty_func(self, max_corr: float) -> float:
         alpha = 0.22
-        penalty = 1.0 - alpha * max_corr ** 2
+        penalty = 1.0 - alpha * max_corr**2
         return max(0.5, penalty)
 
     def _compute_feature_correlations(self, features_df: pd.DataFrame) -> dict[str, float]:
@@ -714,7 +714,9 @@ class FeatureService:
 
             confidence_adjustments = None
             if confidence is not None:
-                trust_factor = adjusted_trust * feature_weight if adjusted_trust is not None else 0.0
+                trust_factor = (
+                    adjusted_trust * feature_weight if adjusted_trust is not None else 0.0
+                )
                 confidence_adjustments = {
                     "raw_confidence": 1.0,
                     "event_multiplier": round(event_multiplier, 4),
@@ -886,7 +888,9 @@ class FeatureService:
                     "event_override": {
                         "active": has_event_override,
                         "event_types": event_info.get("event_types") if event_info else [],
-                        "event_multiplier": event_info.get("event_multiplier") if event_info else 1.0,
+                        "event_multiplier": event_info.get("event_multiplier")
+                        if event_info
+                        else 1.0,
                         "original_trust": event_info.get("original_trust") if event_info else None,
                         "adjusted_trust": event_info.get("adjusted_trust") if event_info else None,
                     },
