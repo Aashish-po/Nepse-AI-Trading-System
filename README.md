@@ -2,27 +2,28 @@
 
 Private research and decision-support platform for NEPSE market data, quantitative research, data quality assurance, realistic backtesting, and signal exploration.
 
-This project is research-only. It does not provide financial advice, guarantee profit, or execute live trades.
+**This project is research-only. It does not provide financial advice, guarantee profit, or execute live trades.**
 
-## What This Platform Does
+## Overview
+
+A comprehensive quantitative research platform designed specifically for the Nepal Stock Exchange (NEPSE) market. The platform provides end-to-end workflows from raw market data ingestion through strategy development, backtesting, and advisory signal generation.
+
+## Architecture
 
 ```text
 Data Sources → Ingestion → Validation → Database → Feature Engineering
   → Data Quality → Trust Scoring → Backtesting → Dashboard / API / Alerts
 ```
 
-| Layer                | Purpose                                                                     |
-| -------------------- | --------------------------------------------------------------------------- | --- |
-| Data Platform        | NEPSE OHLCV ingestion, corporate actions, news, economic indicators         |
-| Data Quality         | Trust scores, source accuracy, freshness checks, drift detection, safe mode |
-| Feature Engineering  | Technical indicators, rolling statistics, regime labels, feature validation |
-| Backtesting          | Realistic simulation with fees, slippage, liquidity filters, partial fills  |
-| Strategy Registry    | Versioned strategies, benchmark comparison, strategy evaluation             |
-| Portfolio Simulation | Account simulation, position tracking, equity curves, allocation            |
-| Explainability       | Signal attribution, trade explanations, audit logs                          |
-| MLOps                | MLflow tracking, model registry, experiment logging                         |
-| Infrastructure       | FastAPI, PostgreSQL/TimescaleDB, Redis, Docker Compose                      |
-| UI                   | Streamlit dashboard, research workbench, alerts                             |     |
+## MVP Success Targets
+
+| Metric | Target |
+|--------|--------|
+| Sharpe Ratio | > 1.2 |
+| Maximum Drawdown | < 20% |
+| Win Rate | > 55% |
+
+All outputs are advisory-only and require human review.
 
 ## MVP Stack
 
@@ -34,6 +35,7 @@ Data Sources → Ingestion → Validation → Database → Feature Engineering
 - Research notebooks: Jupyter
 - Infrastructure: Docker Compose first, Kubernetes later
 - Testing: pytest
+- Linting: ruff
 
 ## Implementation Roadmap
 
@@ -131,6 +133,15 @@ backend/
 | GET    | /data-quality/mode-history                   | Get system mode history                                     |
 | POST   | /data-quality/sources/recover-blacklisted    | Attempt to recover blacklisted sources                      |
 | POST   | /data-quality/trust/apply-decay              | Apply time-based decay to old trust scores                  |
+| POST   | /strategies/                               | Create a new strategy                                       |
+| GET    | /strategies/                               | List all strategies                                         |
+| GET    | /strategies/{strategy_id}                   | Get strategy details                                        |
+| POST   | /strategies/backtests                      | Run backtest for a strategy                                 |
+| GET    | /strategies/backtests/{backtest_id}         | Get backtest results                                        |
+| POST   | /strategies/benchmarks/compare             | Compare strategy vs buy-and-hold/NEPSE                    |
+| POST   | /ml/train                                  | Train an ML model                                           |
+| GET    | /ml/models                                 | List trained models                                         |
+| GET    | /ml/predict/{symbol}                       | Get model prediction for a symbol                           |
 
 ## Local Setup
 
@@ -161,6 +172,54 @@ alembic downgrade -1
 python -m ruff check backend/
 ```
 
+## Seed Symbol Data
+
+```powershell
+python scripts/seed_symbols.py
+```
+
+This populates the database with NEPSE stock symbols for initial testing.
+
 ## Research Boundary
 
 The MVP is intentionally limited to ingestion, data quality, features, realistic backtesting, strategy research, dashboards, and advisory outputs. Live trading, broker execution, and autonomous financial advice are out of scope.
+
+## Research Workflow
+
+The platform supports a notebook-driven research cycle:
+
+```
+1. Idea → 2. Notebook Experiment → 3. Backtest → 4. Strategy Integration → 5. Dashboard/Report
+```
+
+Use `research/notebooks/` for exploratory analysis. All experimental results must be validated through the tested backtesting pipeline before integration.
+
+## Current Phase Status
+
+**Phase 0-5 Complete**: Foundation, database, data quality, features, and backtesting engine are implemented.
+
+### Completed Features
+
+- Realistic backtesting with fees, slippage, liquidity filters, partial fills
+- Strategy registry with versioned configurations
+- Data quality gating for backtest safety
+- Technical indicators (RSI, SMA, EMA, MACD, ATR, returns)
+- Transaction cost and fill rate modeling
+
+### Backtesting Realism
+
+The backtesting engine includes:
+
+- **Fees**: Configurable commission rates (default 0.5%)
+- **Slippage**: Basis points slippage model (default 5.0 bps)
+- **Liquidity**: Minimum volume thresholds and partial fill simulation
+- **Execution Delay**: Configurable bar delay for order execution
+- **Cash Tracking**: Real-time cash and position accounting
+- **Equity Curves**: Full portfolio equity history for every backtest
+
+### Safety Controls
+
+- **Safe Mode**: Blocks low-trust data from feature generation and backtesting
+- **Kill Switch**: Emergency stop for advisory signals
+- **Trust Scores**: Automated data quality scoring with decay adjustment
+- **Data Quality Alerts**: Real-time monitoring of data integrity
