@@ -32,6 +32,7 @@ class Position:
     quantity: int
     entry_price: Decimal
     entry_date: str
+    trailing_high: float = 0.0
 
     @property
     def market_value(self) -> Decimal:
@@ -153,6 +154,8 @@ class BacktestEngine:
                         portfolio = {
                             "cash": float(cash),
                             "price": float(current_price),
+                            "initial_capital": float(self.initial_capital),
+                            "positions": {s: p for s, p in positions.items()},
                         }
                         risk_result = self._check_risk(portfolio, risk_rules, symbol)
                         if risk_result["max_quantity"] > 0 and volume >= self.min_volume_threshold:
@@ -171,6 +174,7 @@ class BacktestEngine:
                                     quantity=actual_qty,
                                     entry_price=actual_price,
                                     entry_date=date_str,
+                                    trailing_high=float(actual_price),
                                 )
                                 trades.append(
                                     {
@@ -294,6 +298,18 @@ class BacktestEngine:
                     return_pct = (current_price - position.entry_price) / position.entry_price
                     if return_pct <= -stop:
                         return True
+            elif rule_type == "trailing_stop":
+                trail_pct = params.get("trail_pct", 0.10)
+                if position.quantity > 0:
+                    close = features.get("close")
+                    if close:
+                        close_val = float(close)
+                        if close_val > position.trailing_high:
+                            position.trailing_high = close_val
+                        trail_level = position.trailing_high * (1 - trail_pct)
+                        if close_val < trail_level:
+                            return True
+
         return False
 
     def _check_risk(
@@ -303,7 +319,9 @@ class BacktestEngine:
         symbol: str,
     ) -> dict[str, Any]:
         cash = portfolio.get("cash", 0)
+        initial_capital = portfolio.get("initial_capital", cash)
         price = portfolio.get("price", 1)
+        positions = portfolio.get("positions", {})
 
         max_qty = int(cash / price) if price > 0 else 0
 
@@ -317,6 +335,16 @@ class BacktestEngine:
             elif rule_type == "single_stock_exposure":
                 max_pct = params.get("max_pct", 0.2)
                 max_shares = int(portfolio.get("cash", 0) * max_pct / price)
+                max_qty = min(max_qty, max_shares)
+            elif rule_type == "max_open_positions":
+                max_pos = params.get("max_count", 5)
+                if len(positions) >= max_pos:
+                    return {"max_quantity": 0}
+            elif rule_type == "cash_reserve":
+                reserve_pct = params.get("reserve_pct", 0.1)
+                reserve_amount = initial_capital * reserve_pct
+                available_cash = cash - reserve_amount
+                max_shares = int(available_cash / price) if price > 0 and available_cash > 0 else 0
                 max_qty = min(max_qty, max_shares)
 
         return {"max_quantity": max(0, max_qty)}

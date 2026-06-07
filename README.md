@@ -228,3 +228,4 @@ The backtesting engine includes:
 - **Kill Switch**: Emergency stop for advisory signals
 - **Trust Scores**: Automated data quality scoring with decay adjustment
 - **Data Quality Alerts**: Real-time monitoring of data integrity
+  

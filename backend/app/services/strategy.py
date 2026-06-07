@@ -94,11 +94,15 @@ class StrategyService:
         entry_rules: list[dict],
     ) -> bool:
         for rule in entry_rules:
-            operator = rule.get("operator", "OR")
-            conditions = rule.get("conditions", [rule] if "rule" in rule else [])
-
             if "rule" in rule:
                 conditions = [rule]
+                operator = "OR"
+            else:
+                operator = rule.get("operator", "OR")
+                conditions = rule.get("conditions", [])
+
+            if not conditions:
+                continue
 
             if operator == "AND":
                 all_met = True
@@ -109,13 +113,9 @@ class StrategyService:
                 if all_met:
                     return True
             else:
-                any_met = False
                 for cond in conditions:
                     if self._evaluate_condition(cond, features):
-                        any_met = True
-                        break
-                if any_met:
-                    return True
+                        return True
 
         return False
 
@@ -230,6 +230,20 @@ class StrategyService:
                 max_pct = params.get("max_pct", 0.2)
                 max_value = portfolio.get("cash", 0) * max_pct
                 max_shares = int(max_value / portfolio.get("price", 1))
+                allowed_qty = min(allowed_qty, max_shares)
+            elif rule_type == "max_open_positions":
+                current_positions = portfolio.get("positions", {})
+                max_pos = params.get("max_count", 5)
+                if len(current_positions) >= max_pos:
+                    return {"max_quantity": 0}
+            elif rule_type == "cash_reserve":
+                initial_capital = portfolio.get("initial_capital", portfolio.get("cash", 0))
+                reserve_pct = params.get("reserve_pct", 0.1)
+                reserve_amount = initial_capital * reserve_pct
+                available_cash = portfolio.get("cash", 0) - reserve_amount
+                max_shares = (
+                    int(available_cash / portfolio.get("price", 1)) if available_cash > 0 else 0
+                )
                 allowed_qty = min(allowed_qty, max_shares)
 
         return {"max_quantity": max(0, int(allowed_qty))}
