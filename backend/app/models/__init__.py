@@ -1,4 +1,3 @@
-from app.models.backtest import Backtest
 from app.models.data_quality import (
     DataQualityAlert,
     DataQualityReport,
@@ -19,6 +18,8 @@ from app.models.stock import Stock
 from app.models.strategy import Strategy
 from app.models.trade import Trade
 from app.models.user import User
+
+from .backtest import Backtest
 
 __all__ = [
     "Backtest",
