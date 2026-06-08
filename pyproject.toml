@@ -10,7 +10,6 @@ pythonpath = ["."]
 line-length = 100
 target-version = "py311"
 
-# Respect common ignores
 exclude = [
     ".git",
     "__pycache__",
@@ -21,6 +20,12 @@ exclude = [
     "node_modules",
     "dist",
     "build",
+]
+
+# ✅ ADD THIS (important)
+extend-exclude = [
+    "research/notebooks",
+    "*.ipynb"
 ]
 
 fix = true
@@ -92,3 +97,5 @@ indent-style = "space"
 # Ignore noise in migrations
 "migrations/*" = ["E501", "F401"]
 "alembic/*" = ["E501", "F401"]
+
+
