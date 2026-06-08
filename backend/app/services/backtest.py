@@ -27,6 +27,13 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class PendingSignal:
+    symbol: str
+    bar_index: int
+    signal_type: str
+
+
+@dataclass
 class Position:
     symbol: str
     quantity: int
@@ -78,19 +85,76 @@ class BacktestEngine:
         start_date: str | None,
         end_date: str | None,
     ) -> dict[str, Any]:
-        # Normalize date params with defaults
         start_date = start_date or "2020-01-01"
         end_date = end_date or "2024-12-31"
         positions: dict[str, Position] = {}
         cash = self.initial_capital
         equity_curve: list[dict[str, Any]] = []
         trades: list[dict[str, Any]] = []
-        date_prices: dict[str, dict[str, Any]] = {}
+        pending_signals: list[PendingSignal] = []
 
         dates = self._get_trading_dates(start_date, end_date, symbols)
 
-        for dt in dates:
+        for bar_index, dt in enumerate(dates):
             date_str = dt.isoformat()
+
+            available_prices: dict[str, dict[str, Any]] = {}
+            for symbol in symbols:
+                try:
+                    self.gate.assert_safe_for_backtest(symbol, date_str)
+                except Exception:
+                    continue
+
+                price_row = self._get_price(symbol, date_str)
+                if price_row is not None:
+                    available_prices[symbol] = price_row
+
+            for signal in pending_signals[:]:
+                if bar_index >= signal.bar_index + self.execution_delay_bars:
+                    pending_signals.remove(signal)
+                    if signal.symbol not in positions and signal.symbol in available_prices:
+                        price_row = available_prices[signal.symbol]
+                        next_open = price_row.get("open") or price_row.get("close")
+                        if next_open:
+                            actual_price = self._apply_slippage(Decimal(str(next_open)), "buy")
+                            volume = price_row.get("volume", 0)
+                            risk_rules = strategy.config.get("risk_rules", [])
+                            portfolio = {
+                                "cash": float(cash),
+                                "price": float(next_open),
+                                "initial_capital": float(self.initial_capital),
+                                "positions": {s: p for s, p in positions.items()},
+                            }
+                            risk_result = self._check_risk(portfolio, risk_rules, signal.symbol)
+                            max_qty = risk_result["max_quantity"]
+                            if volume >= self.min_volume_threshold:
+                                qty = min(max_qty, volume // 10)
+                                fill_rate = self._calculate_fill_rate(volume, qty)
+                                actual_qty = int(qty * fill_rate)
+
+                                cost = Decimal(str(actual_qty)) * actual_price
+                                cost_with_commission = cost * (1 + self.commission_rate)
+                                if cash >= cost_with_commission:
+                                    cash -= cost_with_commission
+                                    positions[signal.symbol] = Position(
+                                        symbol=signal.symbol,
+                                        quantity=actual_qty,
+                                        entry_price=actual_price,
+                                        entry_date=date_str,
+                                        trailing_high=float(next_open),
+                                    )
+                                    trades.append(
+                                        {
+                                            "symbol": signal.symbol,
+                                            "action": "BUY",
+                                            "quantity": float(actual_qty),
+                                            "price": float(actual_price),
+                                            "timestamp": f"{date_str}T09:00:00",
+                                            "transaction_cost": float(cost * self.commission_rate),
+                                            "fill_rate": float(fill_rate),
+                                        }
+                                    )
+
             positions_value = sum(p.market_value for p in positions.values())
             equity = Decimal(str(cash)) + positions_value
             equity_curve.append(
@@ -102,22 +166,11 @@ class BacktestEngine:
                 }
             )
 
-            for symbol in symbols:
-                try:
-                    self.gate.assert_safe_for_backtest(symbol, date_str)
-                except Exception:
-                    continue
-
-                price_row = self._get_price(symbol, date_str)
-                if price_row is None:
-                    continue
-                date_prices[symbol] = price_row
-
+            for symbol, price_row in available_prices.items():
                 features = self._get_features(symbol, date_str)
                 if features is None:
                     continue
 
-                current_price = Decimal(str(price_row.get("close", 0)))
                 volume = price_row.get("volume", 0)
 
                 if symbol in positions:
@@ -125,6 +178,7 @@ class BacktestEngine:
                     pos = positions[symbol]
 
                     if self._should_exit(symbol, date_str, features, exit_rules, pos, price_row):
+                        current_price = Decimal(str(price_row.get("close", 0)))
                         exit_price = self._apply_slippage(current_price, "sell")
                         fill_rate = self._calculate_fill_rate(volume, pos.quantity)
                         actual_qty = int(pos.quantity * fill_rate)
@@ -148,49 +202,24 @@ class BacktestEngine:
                         del positions[symbol]
                 else:
                     entry_rules = strategy.config.get("entry_rules", [])
-                    risk_rules = strategy.config.get("risk_rules", [])
 
                     if self._should_enter(symbol, date_str, features, entry_rules):
-                        portfolio = {
-                            "cash": float(cash),
-                            "price": float(current_price),
-                            "initial_capital": float(self.initial_capital),
-                            "positions": {s: p for s, p in positions.items()},
-                        }
-                        risk_result = self._check_risk(portfolio, risk_rules, symbol)
-                        if risk_result["max_quantity"] > 0 and volume >= self.min_volume_threshold:
-                            qty = min(risk_result["max_quantity"], volume // 10)
-                            buy_price = self._apply_slippage(current_price, "buy")
-                            fill_rate = self._calculate_fill_rate(volume, qty)
-                            actual_qty = int(qty * fill_rate)
-                            actual_price = buy_price
-
-                            cost = Decimal(str(actual_qty)) * actual_price
-                            cost_with_commission = cost * (1 + self.commission_rate)
-                            if cash >= cost_with_commission:
-                                cash -= cost_with_commission
-                                positions[symbol] = Position(
-                                    symbol=symbol,
-                                    quantity=actual_qty,
-                                    entry_price=actual_price,
-                                    entry_date=date_str,
-                                    trailing_high=float(actual_price),
-                                )
-                                trades.append(
-                                    {
-                                        "symbol": symbol,
-                                        "action": "BUY",
-                                        "quantity": float(actual_qty),
-                                        "price": float(actual_price),
-                                        "timestamp": f"{date_str}T09:00:00",
-                                        "transaction_cost": float(cost * self.commission_rate),
-                                        "fill_rate": float(fill_rate),
-                                    }
-                                )
+                        pending_signals.append(
+                            PendingSignal(
+                                symbol=symbol,
+                                bar_index=bar_index,
+                                signal_type="ENTRY",
+                            )
+                        )
 
         return self._calculate_metrics(equity_curve, trades)
 
-    def _get_trading_dates(self, start_date: str, end_date: str, symbols: list[str]) -> list[date]:
+    def _get_trading_dates(
+        self,
+        start_date: str,
+        end_date: str,
+        symbols: list[str],
+    ) -> list[date]:
         dates = []
         start = date.fromisoformat(start_date)
         end = date.fromisoformat(end_date)
