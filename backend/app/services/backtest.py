@@ -85,7 +85,7 @@ class BacktestEngine:
         cash = self.initial_capital
         equity_curve: list[dict[str, Any]] = []
         trades: list[dict[str, Any]] = []
-        date_prices: dict[str, dict[str, Decimal]] = {}
+        date_prices: dict[str, dict[str, Any]] = {}
 
         dates = self._get_trading_dates(start_date, end_date, symbols)
 
@@ -124,7 +124,7 @@ class BacktestEngine:
                     exit_rules = strategy.config.get("exit_rules", [])
                     pos = positions[symbol]
 
-                    if self._should_exit(symbol, date_str, features, exit_rules, pos):
+                    if self._should_exit(symbol, date_str, features, exit_rules, pos, price_row):
                         exit_price = self._apply_slippage(current_price, "sell")
                         fill_rate = self._calculate_fill_rate(volume, pos.quantity)
                         actual_qty = int(pos.quantity * fill_rate)
@@ -275,6 +275,7 @@ class BacktestEngine:
         features: Mapping[str, float | None],
         exit_rules: list[dict],
         position: Position,
+        price_row: dict[str, Any] | None = None,
     ) -> bool:
         for rule in exit_rules:
             rule_type = rule.get("rule")
@@ -286,26 +287,27 @@ class BacktestEngine:
                     return True
             elif rule_type == "take_profit":
                 target = params.get("target", 0.1)
-                if position.quantity > 0:
-                    current_price = Decimal(str(features.get("close", 0)))
+                if position.quantity > 0 and price_row:
+                    current_price = Decimal(str(price_row.get("close", 0)))
                     return_pct = (current_price - position.entry_price) / position.entry_price
                     if return_pct >= target:
                         return True
             elif rule_type == "stop_loss":
                 stop = params.get("stop", 0.05)
-                if position.quantity > 0:
-                    current_price = Decimal(str(features.get("close", 0)))
+                if position.quantity > 0 and price_row:
+                    current_price = Decimal(str(price_row.get("close", 0)))
                     return_pct = (current_price - position.entry_price) / position.entry_price
                     if return_pct <= -stop:
                         return True
             elif rule_type == "trailing_stop":
                 trail_pct = params.get("trail_pct", 0.10)
-                if position.quantity > 0:
-                    close = features.get("close")
+                if position.quantity > 0 and price_row:
+                    high = price_row.get("high")
+                    close = price_row.get("close")
+                    if high and float(high) > position.trailing_high:
+                        position.trailing_high = float(high)
                     if close:
                         close_val = float(close)
-                        if close_val > position.trailing_high:
-                            position.trailing_high = close_val
                         trail_level = position.trailing_high * (1 - trail_pct)
                         if close_val < trail_level:
                             return True
