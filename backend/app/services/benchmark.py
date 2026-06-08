@@ -8,12 +8,11 @@ from typing import Any
 
 import numpy as np
 import sqlalchemy as sa
+from app.db.session import SessionLocal
+from app.models.benchmark import NEPSEIndex, SectorIndex
+from app.models.price import Price
+from app.models.stock import Stock
 from sqlalchemy.orm import Session
-
-from backend.app.db.session import SessionLocal
-from backend.app.models.benchmark import NEPSEIndex, SectorIndex
-from backend.app.models.price import Price
-from backend.app.models.stock import Stock
 
 logger = logging.getLogger(__name__)
 

@@ -1,11 +1,10 @@
 import datetime
 from decimal import Decimal
 
+from app.db.base import Base
+from app.models.types import big_int_pk_type
 from sqlalchemy import Date, ForeignKey, Index, Numeric, UniqueConstraint, desc
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
-from backend.app.db.base import Base
-from backend.app.models.types import big_int_pk_type
 
 
 class Price(Base):

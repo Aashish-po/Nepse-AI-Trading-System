@@ -5,11 +5,11 @@ from __future__ import annotations
 import logging
 from typing import Annotated, Any
 
+from app.db.session import get_db
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from backend.app.db.session import get_db
 from ml.dataset import DatasetBuilder
 from ml.evaluation import ModelEvaluator
 from ml.inference import Predictor
@@ -84,9 +84,8 @@ def train_model(request: TrainRequest, db: DbSession) -> TrainResponse:
 
 @router.get("/models")
 def list_models(db: DbSession) -> dict[str, Any]:
+    from app.models.model_registry import ModelRegistry
     from sqlalchemy import select
-
-    from backend.app.models.model_registry import ModelRegistry
 
     models = db.scalars(select(ModelRegistry).order_by(ModelRegistry.created_at.desc())).all()
     return {
@@ -105,7 +104,7 @@ def list_models(db: DbSession) -> dict[str, Any]:
 
 @router.get("/predict/{symbol}", response_model=PredictResponse)
 def predict(symbol: str, db: DbSession) -> dict[str, Any]:
-    from backend.app.services.feature import FeatureService
+    from app.services.feature import FeatureService
 
     fetcher = FeatureService(session=db)
     latest = fetcher.get_features_list(symbol, limit=1, offset=0)

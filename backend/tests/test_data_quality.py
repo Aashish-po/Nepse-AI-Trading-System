@@ -1,12 +1,11 @@
 from datetime import UTC, date, datetime, timedelta
 
+from app.models.data_quality import DataTrust, HolidayCalendar
+from app.models.price import Price
+from app.models.stock import Stock
+from app.services.data_quality import DataQualityService
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-
-from backend.app.models.data_quality import DataTrust, HolidayCalendar
-from backend.app.models.price import Price
-from backend.app.models.stock import Stock
-from backend.app.services.data_quality import DataQualityService
 
 
 def _seed_price(
@@ -327,7 +326,7 @@ def test_get_system_mode_degraded(db_session: Session) -> None:
 
 
 def test_source_accuracy_score(db_session: Session) -> None:
-    from backend.app.models.data_source import DataSource, IngestionLog
+    from app.models.data_source import DataSource, IngestionLog
 
     source = DataSource(name="TEST_SOURCE", type="api", is_active=True)
     db_session.add(source)
@@ -365,7 +364,7 @@ def test_source_accuracy_score(db_session: Session) -> None:
 
 
 def test_calculate_weighted_price(db_session: Session) -> None:
-    from backend.app.models.data_source import DataSource
+    from app.models.data_source import DataSource
 
     _seed_price(db_session, "WP1", "2024-06-01", close=100.0, volume=1000)
 
@@ -383,7 +382,7 @@ def test_calculate_weighted_price(db_session: Session) -> None:
 
 
 def test_safe_mode_blocks_feature_generation(db_session: Session) -> None:
-    from backend.app.services.data_quality_gate import DataQualityGate, SystemMode
+    from app.services.data_quality_gate import DataQualityGate, SystemMode
 
     db_session.add(Stock(symbol="BLOCKED", is_active=True))
     db_session.commit()
@@ -409,9 +408,8 @@ def test_safe_mode_blocks_feature_generation(db_session: Session) -> None:
 
 
 def test_system_mode_persists_history(db_session: Session) -> None:
+    from app.models.data_quality import SystemModeHistory
     from sqlalchemy import func
-
-    from backend.app.models.data_quality import SystemModeHistory
 
     _seed_price(db_session, "HIST", "2024-06-01", close=100.0, volume=1000)
 
@@ -431,7 +429,7 @@ def test_system_mode_persists_history(db_session: Session) -> None:
 
 
 def test_source_drift_detection(db_session: Session) -> None:
-    from backend.app.models.data_source import DataSource, IngestionLog
+    from app.models.data_source import DataSource, IngestionLog
 
     source = DataSource(name="DRIFT_TEST", type="api", is_active=True)
     db_session.add(source)
@@ -470,7 +468,7 @@ def test_source_drift_detection(db_session: Session) -> None:
 
 
 def test_blacklist_recovery(db_session: Session) -> None:
-    from backend.app.models.data_source import DataSource, IngestionLog
+    from app.models.data_source import DataSource, IngestionLog
 
     source = DataSource(name="RECOVERY", type="api", is_active=False, accuracy_score=0.2)
     db_session.add(source)
@@ -534,13 +532,15 @@ def test_trust_version_persisted(db_session: Session) -> None:
 def test_trust_version_v2_calculation(db_session: Session) -> None:
     _seed_price(db_session, "VER2", "2024-06-01", close=100.0, volume=1000)
 
+    stock = db_session.scalar(select(Stock).where(Stock.symbol == "VER2"))
+    assert stock is not None
     service = DataQualityService(session=db_session)
     trust_score, details, components = service.compute_trust_score_with_version(
         db_session,
-        db_session.scalar(select(Stock).where(Stock.symbol == "VER2")).id,
+        stock.id,
         db_session.scalar(
             select(Price).where(
-                Price.stock_id == db_session.scalar(select(Stock).where(Stock.symbol == "VER2")).id,
+                Price.stock_id == stock.id,
                 Price.date == date(2024, 6, 1),
             )
         ),
@@ -551,7 +551,7 @@ def test_trust_version_v2_calculation(db_session: Session) -> None:
 
 
 def test_source_correlation_detection(db_session: Session) -> None:
-    from backend.app.models.data_source import DataSource, IngestionLog
+    from app.models.data_source import DataSource, IngestionLog
 
     src1 = DataSource(name="SRC_A", type="api", is_active=True)
     src2 = DataSource(name="SRC_B", type="api", is_active=True)

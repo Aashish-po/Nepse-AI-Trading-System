@@ -7,10 +7,9 @@ from collections.abc import Mapping
 from typing import Any
 
 import sqlalchemy as sa
+from app.db.session import SessionLocal
+from app.models.strategy import Strategy
 from sqlalchemy.orm import Session
-
-from backend.app.db.session import SessionLocal
-from backend.app.models.strategy import Strategy
 
 logger = logging.getLogger(__name__)
 

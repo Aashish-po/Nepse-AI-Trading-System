@@ -7,22 +7,22 @@ from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
 
+import app.models  # noqa: F401
 import numpy as np
 import pytest
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
-
-import backend.app.models  # noqa: F401
-from backend.app.db.base import Base
-from backend.app.models.model_registry import ModelRegistry
-from backend.app.models.price import Price
-from backend.app.models.stock import Stock
-from backend.app.services.feature import (
+from app.db.base import Base
+from app.models.model_registry import ModelRegistry
+from app.models.price import Price
+from app.models.stock import Stock
+from app.services.feature import (
     FEATURE_REGISTRY,
     FEATURE_VERSION,
     FeatureService,
 )
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
+
 from ml.dataset import DatasetBuilder, DatasetBundle
 from ml.drift_monitoring import CorrelationMonitor, DriftMonitor
 from ml.evaluation import ModelEvaluator

@@ -1,10 +1,9 @@
 import datetime
 
+from app.db.base import Base
+from app.models.types import big_int_pk_type, json_dict_type
 from sqlalchemy import Date, Float, ForeignKey, Index, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
-
-from backend.app.db.base import Base
-from backend.app.models.types import big_int_pk_type, json_dict_type
 
 
 class Feature(Base):

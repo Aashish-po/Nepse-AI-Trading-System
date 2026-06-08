@@ -89,3 +89,15 @@ Thumbs.db
 .kilo/plans/
 
 
+# Ignore personal notes
+plan.md
+notes.md
+NEPSE_AI_Trading_Research_Platform_Integrated.md
+.kilo/plans/
+TODO.md
+TODO_Phase_6.md
+PLANS.md
+PLANS_Phase_6.md
+PLAN.md
+
+

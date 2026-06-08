@@ -1,9 +1,10 @@
+from collections.abc import Sequence
+
+from app.models.price import Price
+from app.models.stock import Stock
+from app.schemas.market import PriceIngestRequest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-
-from backend.app.models.price import Price
-from backend.app.models.stock import Stock
-from backend.app.schemas.market import PriceIngestRequest
 
 
 def get_or_create_stock(db: Session, payload: PriceIngestRequest) -> Stock:
@@ -40,8 +41,8 @@ def list_prices(
     symbol: str | None = None,
     limit: int = 100,
     offset: int = 0,
-) -> list[tuple[Price, Stock]]:
+) -> Sequence[tuple[Price, Stock]]:
     query = select(Price, Stock).join(Stock, Price.stock_id == Stock.id).order_by(Price.date.desc())
     if symbol:
         query = query.where(Stock.symbol == symbol.upper())
-    return list(db.execute(query.limit(limit).offset(offset)).all())
+    return [tuple(row) for row in db.execute(query.limit(limit).offset(offset)).all()]

@@ -1,18 +1,17 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-
-from backend.app.db.session import get_db
-from backend.app.schemas.feature import (
+from app.db.session import get_db
+from app.schemas.feature import (
     FeatureBatchRequest,
     FeatureBatchResponse,
     FeatureResponse,
     MultiStockFeatureRequest,
     MultiStockFeatureResponse,
 )
-from backend.app.services.data_quality_gate import DataQualityGate
-from backend.app.services.feature import FeatureService
+from app.services.data_quality_gate import DataQualityGate
+from app.services.feature import FeatureService
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/features", tags=["features"])
 DbSession = Annotated[Session, Depends(get_db)]

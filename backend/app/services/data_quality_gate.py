@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-from backend.app.services.data_quality import DataQualityService
+from app.services.data_quality import DataQualityService
 
 
 class DataQualityStatus(str, Enum):

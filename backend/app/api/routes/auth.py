@@ -1,11 +1,10 @@
 from typing import Annotated
 
+from app.db.session import get_db
+from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse
+from app.services.auth import authenticate_user, get_user_by_email, register_user
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-
-from backend.app.db.session import get_db
-from backend.app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse
-from backend.app.services.auth import authenticate_user, get_user_by_email, register_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 DbSession = Annotated[Session, Depends(get_db)]

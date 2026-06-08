@@ -6,14 +6,13 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import sqlalchemy as sa
+from app.db.session import SessionLocal
+from app.models.data_source import IngestionLog
+from app.models.price import Price
+from app.models.stock import Stock
+from app.services.data_quality import DataQualityService
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
-
-from backend.app.db.session import SessionLocal
-from backend.app.models.data_source import IngestionLog
-from backend.app.models.price import Price
-from backend.app.models.stock import Stock
-from backend.app.services.data_quality import DataQualityService
 
 MAX_RETRIES = 3
 

@@ -3,10 +3,9 @@ from __future__ import annotations
 from datetime import datetime
 
 import sqlalchemy as sa
+from app.db.base import Base
 from sqlalchemy import Boolean, CheckConstraint, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
-
-from backend.app.db.base import Base
 
 
 class DataSource(Base):

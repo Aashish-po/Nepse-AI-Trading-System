@@ -6,10 +6,8 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import sqlalchemy as sa
-from sqlalchemy.orm import Session
-
-from backend.app.db.session import SessionLocal
-from backend.app.models.data_quality import (
+from app.db.session import SessionLocal
+from app.models.data_quality import (
     DataQualityAlert,
     DataQualityReport,
     DataTrust,
@@ -18,9 +16,10 @@ from backend.app.models.data_quality import (
     SourceCorrelation,
     SystemModeHistory,
 )
-from backend.app.models.data_source import DataSource, IngestionLog
-from backend.app.models.price import Price
-from backend.app.models.stock import Stock
+from app.models.data_source import DataSource, IngestionLog
+from app.models.price import Price
+from app.models.stock import Stock
+from sqlalchemy.orm import Session
 
 
 class DataQualityService:

@@ -1,9 +1,8 @@
 import datetime
 
+from app.db.base import Base
 from sqlalchemy import Boolean, CheckConstraint, Date, DateTime, Float, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
-
-from backend.app.db.base import Base
 
 
 class HolidayCalendar(Base):

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from sqlalchemy import DateTime, String, func
-from sqlalchemy.orm import Mapped, mapped_column
+from datetime import datetime
 
-from backend.app.db.base import Base
-from backend.app.models.types import json_dict_type
+import sqlalchemy as sa
+from app.db.base import Base
+from app.models.types import json_dict_type
+from sqlalchemy import String
+from sqlalchemy.orm import Mapped, mapped_column
 
 
 class ModelRegistry(Base):
@@ -17,6 +19,6 @@ class ModelRegistry(Base):
     params: Mapped[dict] = mapped_column(json_dict_type, nullable=True)
     model_artifact_path: Mapped[str] = mapped_column(String(500), nullable=True)
     metrics: Mapped[dict] = mapped_column(json_dict_type, nullable=True)
-    created_at: Mapped[DateTime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+    created_at: Mapped[datetime] = mapped_column(
+        sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
     )

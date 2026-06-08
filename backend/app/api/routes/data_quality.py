@@ -1,17 +1,16 @@
 from typing import Annotated
 
 import sqlalchemy as sa
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
-
-from backend.app.db.session import get_db
-from backend.app.models.data_quality import SystemModeHistory
-from backend.app.schemas.data_quality import (
+from app.db.session import get_db
+from app.models.data_quality import SystemModeHistory
+from app.schemas.data_quality import (
     DataQualityReportResponse,
     SymbolQualitySummaryResponse,
     TrustScoreResponse,
 )
-from backend.app.services.data_quality import DataQualityService
+from app.services.data_quality import DataQualityService
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/data-quality", tags=["data-quality"])
 DbSession = Annotated[Session, Depends(get_db)]

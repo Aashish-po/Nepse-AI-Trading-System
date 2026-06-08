@@ -1,13 +1,12 @@
 from typing import Annotated
 
+from app.db.session import get_db
+from app.schemas.ingestion import IngestionRequest
+from app.schemas.market import PriceIngestRequest, PriceResponse
+from app.services.ingestion import IngestionService
+from app.services.market import ingest_price, list_prices
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
-
-from backend.app.db.session import get_db
-from backend.app.schemas.ingestion import IngestionRequest
-from backend.app.schemas.market import PriceIngestRequest, PriceResponse
-from backend.app.services.ingestion import IngestionService
-from backend.app.services.market import ingest_price, list_prices
 
 router = APIRouter(prefix="/market", tags=["market"])
 DbSession = Annotated[Session, Depends(get_db)]

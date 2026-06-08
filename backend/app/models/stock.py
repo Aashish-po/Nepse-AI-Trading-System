@@ -1,7 +1,6 @@
+from app.db.base import Base
 from sqlalchemy import Boolean, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
-from backend.app.db.base import Base
 
 
 class Stock(Base):

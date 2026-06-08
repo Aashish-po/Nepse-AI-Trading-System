@@ -3,21 +3,20 @@
 from typing import Annotated
 
 import sqlalchemy as sa
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-
-from backend.app.db.session import get_db
-from backend.app.models.backtest import Backtest
-from backend.app.schemas.strategy import (
+from app.db.session import get_db
+from app.models.backtest import Backtest
+from app.schemas.strategy import (
     BacktestCreate,
     BenchmarkCompareRequest,
     StrategyCreate,
     StrategyDetailResponse,
     StrategyResponse,
 )
-from backend.app.services.backtest import BacktestService
-from backend.app.services.benchmark import BenchmarkService
-from backend.app.services.strategy import StrategyService
+from app.services.backtest import BacktestService
+from app.services.benchmark import BenchmarkService
+from app.services.strategy import StrategyService
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/strategies", tags=["strategies"])
 DbSession = Annotated[Session, Depends(get_db)]

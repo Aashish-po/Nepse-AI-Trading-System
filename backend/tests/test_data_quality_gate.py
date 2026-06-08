@@ -1,18 +1,17 @@
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session
-
-from backend.app.models.data_quality import HolidayCalendar
-from backend.app.models.price import Price
-from backend.app.models.stock import Stock
-from backend.app.services.data_quality_gate import (
+from app.models.data_quality import HolidayCalendar
+from app.models.price import Price
+from app.models.stock import Stock
+from app.services.data_quality_gate import (
     DataQualityGate,
     DataQualityGateError,
     DataQualityStatus,
 )
-from backend.app.services.feature import FeatureService
+from app.services.feature import FeatureService
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 
 def test_feature_gate_blocks_nonexistent_symbol(db_session: Session) -> None:

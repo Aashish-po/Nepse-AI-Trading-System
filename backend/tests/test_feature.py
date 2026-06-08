@@ -2,14 +2,13 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 import numpy as np
+from app.models.feature import Feature
+from app.models.price import Price
+from app.models.stock import Stock
+from app.services.data_quality import DataQualityService
+from app.services.feature import FeatureService
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-
-from backend.app.models.feature import Feature
-from backend.app.models.price import Price
-from backend.app.models.stock import Stock
-from backend.app.services.data_quality import DataQualityService
-from backend.app.services.feature import FeatureService
 
 
 def _seed_price_series(
@@ -466,7 +465,7 @@ def test_standardized_event_types(db_session: Session) -> None:
 
 
 def test_feature_registry_coverage(db_session: Session) -> None:
-    from backend.app.services.feature import FEATURE_REGISTRY
+    from app.services.feature import FEATURE_REGISTRY
 
     required_groups = {"momentum", "trend", "volatility", "volume"}
     registered_groups = {entry["group"] for entry in FEATURE_REGISTRY.values()}

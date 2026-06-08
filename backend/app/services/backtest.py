@@ -11,17 +11,16 @@ from typing import Any
 
 import numpy as np
 import sqlalchemy as sa
+from app.db.session import SessionLocal
+from app.models.backtest import Backtest
+from app.models.portfolio_snapshot import PortfolioSnapshot
+from app.models.price import Price
+from app.models.stock import Stock
+from app.models.strategy import Strategy
+from app.models.trade import Trade
+from app.services.data_quality_gate import DataQualityGate
+from app.services.feature import FeatureService
 from sqlalchemy.orm import Session
-
-from backend.app.db.session import SessionLocal
-from backend.app.models.backtest import Backtest
-from backend.app.models.portfolio_snapshot import PortfolioSnapshot
-from backend.app.models.price import Price
-from backend.app.models.stock import Stock
-from backend.app.models.strategy import Strategy
-from backend.app.models.trade import Trade
-from backend.app.services.data_quality_gate import DataQualityGate
-from backend.app.services.feature import FeatureService
 
 logger = logging.getLogger(__name__)
 
@@ -111,49 +110,58 @@ class BacktestEngine:
 
             for signal in pending_signals[:]:
                 if bar_index >= signal.bar_index + self.execution_delay_bars:
-                    pending_signals.remove(signal)
-                    if signal.symbol not in positions and signal.symbol in available_prices:
-                        price_row = available_prices[signal.symbol]
-                        next_open = price_row.get("open") or price_row.get("close")
-                        if next_open:
-                            actual_price = self._apply_slippage(Decimal(str(next_open)), "buy")
-                            volume = price_row.get("volume", 0)
-                            risk_rules = strategy.config.get("risk_rules", [])
-                            portfolio = {
-                                "cash": float(cash),
-                                "price": float(next_open),
-                                "initial_capital": float(self.initial_capital),
-                                "positions": {s: p for s, p in positions.items()},
-                            }
-                            risk_result = self._check_risk(portfolio, risk_rules, signal.symbol)
-                            max_qty = risk_result["max_quantity"]
-                            if volume >= self.min_volume_threshold:
-                                qty = min(max_qty, volume // 10)
-                                fill_rate = self._calculate_fill_rate(volume, qty)
-                                actual_qty = int(qty * fill_rate)
+                    if signal.symbol in positions:
+                        pending_signals.remove(signal)
+                        continue
+                    if signal.symbol not in available_prices:
+                        pending_signals.remove(signal)
+                        continue
 
-                                cost = Decimal(str(actual_qty)) * actual_price
-                                cost_with_commission = cost * (1 + self.commission_rate)
-                                if cash >= cost_with_commission:
-                                    cash -= cost_with_commission
-                                    positions[signal.symbol] = Position(
-                                        symbol=signal.symbol,
-                                        quantity=actual_qty,
-                                        entry_price=actual_price,
-                                        entry_date=date_str,
-                                        trailing_high=float(next_open),
-                                    )
-                                    trades.append(
-                                        {
-                                            "symbol": signal.symbol,
-                                            "action": "BUY",
-                                            "quantity": float(actual_qty),
-                                            "price": float(actual_price),
-                                            "timestamp": f"{date_str}T09:00:00",
-                                            "transaction_cost": float(cost * self.commission_rate),
-                                            "fill_rate": float(fill_rate),
-                                        }
-                                    )
+                    price_row = available_prices[signal.symbol]
+                    next_open = price_row.get("open") or price_row.get("close")
+                    if not next_open:
+                        pending_signals.remove(signal)
+                        continue
+
+                    actual_price = self._apply_slippage(Decimal(str(next_open)), "buy")
+                    volume = price_row.get("volume", 0)
+                    risk_rules = strategy.config.get("risk_rules", [])
+                    portfolio = {
+                        "cash": float(cash),
+                        "price": float(next_open),
+                        "initial_capital": float(self.initial_capital),
+                        "positions": {s: p for s, p in positions.items()},
+                    }
+                    risk_result = self._check_risk(portfolio, risk_rules, signal.symbol)
+                    max_qty = risk_result["max_quantity"]
+                    if volume >= self.min_volume_threshold:
+                        qty = min(max_qty, volume // 10)
+                        fill_rate = self._calculate_fill_rate(volume, qty)
+                        actual_qty = int(qty * fill_rate)
+
+                        cost = Decimal(str(actual_qty)) * actual_price
+                        cost_with_commission = cost * (1 + self.commission_rate)
+                        if cash >= cost_with_commission:
+                            cash -= cost_with_commission
+                            positions[signal.symbol] = Position(
+                                symbol=signal.symbol,
+                                quantity=actual_qty,
+                                entry_price=actual_price,
+                                entry_date=date_str,
+                                trailing_high=float(next_open),
+                            )
+                            trades.append(
+                                {
+                                    "symbol": signal.symbol,
+                                    "action": "BUY",
+                                    "quantity": float(actual_qty),
+                                    "price": float(actual_price),
+                                    "timestamp": f"{date_str}T09:00:00",
+                                    "transaction_cost": float(cost * self.commission_rate),
+                                    "fill_rate": float(fill_rate),
+                                }
+                            )
+                    pending_signals.remove(signal)
 
             positions_value = sum(p.market_value for p in positions.values())
             equity = Decimal(str(cash)) + positions_value
@@ -204,13 +212,15 @@ class BacktestEngine:
                     entry_rules = strategy.config.get("entry_rules", [])
 
                     if self._should_enter(symbol, date_str, features, entry_rules):
-                        pending_signals.append(
-                            PendingSignal(
-                                symbol=symbol,
-                                bar_index=bar_index,
-                                signal_type="ENTRY",
+                        has_pending = any(s.symbol == symbol for s in pending_signals)
+                        if not has_pending:
+                            pending_signals.append(
+                                PendingSignal(
+                                    symbol=symbol,
+                                    bar_index=bar_index,
+                                    signal_type="ENTRY",
+                                )
                             )
-                        )
 
         return self._calculate_metrics(equity_curve, trades)
 
@@ -427,6 +437,8 @@ class BacktestEngine:
             "max_drawdown": round(max_drawdown, 6),
             "sharpe_ratio": round(sharpe, 4) if sharpe is not None else None,
             "win_rate": self._calculate_win_rate(trades),
+            "profit_factor": self._calculate_profit_factor(trades),
+            "expectancy": self._calculate_expectancy(trades),
             "equity_curve": equity_curve,
             "trades": trades,
         }
@@ -468,6 +480,52 @@ class BacktestEngine:
                     profitable += 1
                     break
         return round(profitable / len(buys), 4) if buys else 0.0
+
+    def _calculate_profit_factor(self, trades: list[dict[str, Any]]) -> float:
+        buys = [t for t in trades if t["action"] == "BUY"]
+        sells = [t for t in trades if t["action"] == "SELL"]
+        if not buys or not sells:
+            return 0.0
+
+        gross_profit = Decimal("0")
+        gross_loss = Decimal("0")
+
+        for sell in sells:
+            matching_buys = [b for b in buys if b["symbol"] == sell["symbol"]]
+            for buy in matching_buys:
+                pnl = Decimal(str(sell["price"])) * Decimal(str(sell["quantity"])) - Decimal(
+                    str(buy["price"])
+                ) * Decimal(str(buy["quantity"]))
+                if pnl > 0:
+                    gross_profit += pnl
+                else:
+                    gross_loss += abs(pnl)
+
+        if gross_loss == 0:
+            return float(gross_profit) if gross_profit > 0 else 0.0
+        return round(float(gross_profit / gross_loss), 4)
+
+    def _calculate_expectancy(self, trades: list[dict[str, Any]]) -> float:
+        buys = [t for t in trades if t["action"] == "BUY"]
+        sells = [t for t in trades if t["action"] == "SELL"]
+        if not buys or not sells:
+            return 0.0
+
+        total_pnl = Decimal("0")
+        trade_count = 0
+
+        for sell in sells:
+            matching_buys = [b for b in buys if b["symbol"] == sell["symbol"]]
+            for buy in matching_buys:
+                pnl = Decimal(str(sell["price"])) * Decimal(str(sell["quantity"])) - Decimal(
+                    str(buy["price"])
+                ) * Decimal(str(buy["quantity"]))
+                total_pnl += pnl
+                trade_count += 1
+
+        if trade_count == 0:
+            return 0.0
+        return round(float(total_pnl / trade_count), 4)
 
 
 class BacktestService:

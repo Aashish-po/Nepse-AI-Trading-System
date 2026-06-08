@@ -3,17 +3,16 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
+from app.models.benchmark import NEPSEIndex, SectorIndex
+from app.models.price import Price
+from app.models.stock import Stock
+from app.models.strategy import Strategy
+from app.models.trade import Trade
+from app.services.backtest import BacktestEngine
+from app.services.benchmark import BenchmarkService
+from app.services.strategy import StrategyService
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-
-from backend.app.models.benchmark import NEPSEIndex, SectorIndex
-from backend.app.models.price import Price
-from backend.app.models.stock import Stock
-from backend.app.models.strategy import Strategy
-from backend.app.models.trade import Trade
-from backend.app.services.backtest import BacktestEngine
-from backend.app.services.benchmark import BenchmarkService
-from backend.app.services.strategy import StrategyService
 
 
 def _seed_strategy(
@@ -189,7 +188,7 @@ class TestBacktestEngine:
 
 class TestBenchmarkService:
     def test_get_trading_dates(self) -> None:
-        from backend.app.services.backtest import BacktestEngine
+        from app.services.backtest import BacktestEngine
 
         engine = BacktestEngine()
         dates = engine._get_trading_dates("2024-01-01", "2024-01-05", ["TEST"])
@@ -206,6 +205,26 @@ class TestBenchmarkService:
         result = service._calculate_benchmark_metrics(equity_curve)
         assert result["period_return"] == 0.1
         assert "annualized_return" in result
+
+    def test_calculate_profit_factor(self) -> None:
+        engine = BacktestEngine()
+        trades = [
+            {"action": "BUY", "symbol": "A", "quantity": 100, "price": 100.0},
+            {"action": "SELL", "symbol": "A", "quantity": 100, "price": 120.0},
+            {"action": "BUY", "symbol": "B", "quantity": 100, "price": 100.0},
+            {"action": "SELL", "symbol": "B", "quantity": 100, "price": 80.0},
+        ]
+        result = engine._calculate_profit_factor(trades)
+        assert result == 1.0
+
+    def test_calculate_expectancy(self) -> None:
+        engine = BacktestEngine()
+        trades = [
+            {"action": "BUY", "symbol": "A", "quantity": 100, "price": 100.0},
+            {"action": "SELL", "symbol": "A", "quantity": 100, "price": 105.0},
+        ]
+        result = engine._calculate_expectancy(trades)
+        assert result == 500.0
 
 
 class TestModelsIntegration:
