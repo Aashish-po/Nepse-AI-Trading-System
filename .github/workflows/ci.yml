@@ -39,11 +39,14 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}
 
       - name: API import smoke test
-        run: python -c "from backend.app.main import app; print(app.title)"
+        run: |
+          cd backend
+          python -c "from app.main import app; print('App title:', app.title)"
         env:
           PYTHONPATH: ${{ github.workspace }}
 
       - name: ML module import smoke test
-        run: python -c "from ml.risk_manager import RiskManager; rm = RiskManager(); print(rm.max_drawdown)"
+        run: |
+          python -c "from ml.risk_manager import RiskManager; rm = RiskManager(); print('Max drawdown:', rm.max_drawdown)"
         env:
           PYTHONPATH: ${{ github.workspace }}

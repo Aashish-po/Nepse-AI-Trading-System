@@ -66,6 +66,7 @@ known-third-party = [
     "sqlalchemy",
     "numpy",
     "pandas",
+    "pyarrow",
 ]
 
 section-order = [

@@ -139,7 +139,7 @@ def test_hard_gate_status_classification(db_session: Session) -> None:
 
 
 def test_get_system_mode_result(db_session: Session) -> None:
-    from backend.app.services.data_quality_gate import SystemMode
+    from app.services.data_quality_gate import SystemMode
 
     stock = db_session.scalar(select(Stock).where(Stock.symbol == "MODE_TEST"))
     if stock is None:

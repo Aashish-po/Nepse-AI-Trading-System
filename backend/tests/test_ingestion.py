@@ -1,6 +1,5 @@
+from app.services.ingestion import IngestionService
 from sqlalchemy.orm import Session
-
-from backend.app.services.ingestion import IngestionService
 
 
 def test_ingestion_inserts_data(db_session: Session) -> None:

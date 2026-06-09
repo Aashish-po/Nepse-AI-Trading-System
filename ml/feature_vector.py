@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import Any
 
 import numpy as np
@@ -12,8 +11,6 @@ from backend.app.services.feature import FEATURE_REGISTRY
 
 FEATURE_ORDER = list(FEATURE_REGISTRY.keys())
 FEATURE_DIM = len(FEATURE_ORDER)
-
-logger = logging.getLogger(__name__)
 
 
 def validate_vector(vector: NDArray[np.float64]) -> NDArray[np.float64]:
