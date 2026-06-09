@@ -13,6 +13,7 @@ class Feature(Base):
             "stock_id", "date", "feature_version", name="uq_features_stock_date_version"
         ),
         Index("ix_features_stock_id_date", "stock_id", "date"),
+        {"extend_existing": True},
     )
 
     id: Mapped[int] = mapped_column(big_int_pk_type, primary_key=True)

@@ -27,9 +27,21 @@ def load_strategies() -> list[dict]:
     try:
         res = requests.get(f"{API_BASE}/strategies/", timeout=5)
         res.raise_for_status()
-        return res.json()
+        payload = res.json()
+
+        # Expected: list[dict]
+        if not isinstance(payload, list):
+            st.warning("⚠️ Unexpected /strategies response format. Expected a list.")
+            return []
+
+        # Best-effort validation for dict items
+        cleaned: list[dict] = []
+        for item in payload:
+            if isinstance(item, dict):
+                cleaned.append(item)
+        return cleaned
     except Exception:
-        st.error("⚠️ Backend not running or failed to connect")
+        st.error("⚠️ Backend not running or failed to connect (GET /strategies/).")
         return []
 
 
@@ -133,8 +145,24 @@ end_date = st.sidebar.text_input("End Date (YYYY-MM-DD)", value="2023-01-01")
 run_button = st.sidebar.button("🚀 Run Backtest")
 
 if run_button:
+    if not strategies:
+        st.error("No strategies are available from backend.")
+        st.stop()
+
+    # Map selected id -> full strategy object (for richer exports)
+    try:
+        selected_id_int = int(selected_strategy)
+    except Exception:
+        st.error("Invalid selected strategy id.")
+        st.stop()
+
+    selected_strategy_obj = next(
+        (s for s in strategies if int(s.get("id")) == selected_id_int),
+        {},
+    )
+
     payload = {
-        "strategy_id": int(selected_strategy),
+        "strategy_id": selected_id_int,
         "config": {
             "start_date": _parse_date(start_date),
             "end_date": _parse_date(end_date),
@@ -146,11 +174,15 @@ if run_button:
     }
 
     with st.spinner("Running backtest..."):
-        result = run_backtest(payload)
+        try:
+            result = run_backtest(payload)
+        except Exception as e:
+            st.error(f"Backtest failed: {e}")
+            st.stop()
 
-    metrics = result.get("metrics", {})
-    equity_curve = metrics.get("equity_curve", [])
-    trades = metrics.get("trades", [])
+    metrics = result.get("metrics", {}) if isinstance(result, dict) else {}
+    equity_curve = metrics.get("equity_curve", []) if isinstance(metrics, dict) else []
+    trades = metrics.get("trades", []) if isinstance(metrics, dict) else []
 
     st.subheader("📊 Performance Metrics")
     col1, col2, col3, col4 = st.columns(4)
@@ -167,14 +199,17 @@ if run_button:
     st.subheader("📈 Equity Curve")
     if equity_curve:
         df_eq = pd.DataFrame(equity_curve)
-        df_eq["date"] = pd.to_datetime(df_eq["date"])
-        df_eq = df_eq.sort_values("date").set_index("date")
-        st.line_chart(df_eq["equity"])
+        if "date" in df_eq.columns and "equity" in df_eq.columns:
+            df_eq["date"] = pd.to_datetime(df_eq["date"])
+            df_eq = df_eq.sort_values("date").set_index("date")
+            st.line_chart(df_eq["equity"])
 
-        st.subheader("📉 Drawdown")
-        rolling_max = df_eq["equity"].cummax()
-        drawdown = (df_eq["equity"] - rolling_max) / rolling_max
-        st.line_chart(drawdown)
+            st.subheader("📉 Drawdown")
+            rolling_max = df_eq["equity"].cummax()
+            drawdown = (df_eq["equity"] - rolling_max) / rolling_max
+            st.line_chart(drawdown)
+        else:
+            st.warning("Equity curve returned but missing expected columns: date/equity.")
     else:
         st.info("No equity curve data returned.")
 
@@ -193,7 +228,13 @@ if run_button:
         "symbol": bench_symbol,
     }
 
-    bench = compare_benchmark(bench_payload)
+    with st.spinner("Comparing benchmark..."):
+        try:
+            bench = compare_benchmark(bench_payload)
+        except Exception as e:
+            st.warning(f"Benchmark compare failed: {e}")
+            bench = None
+
     if bench:
         period_return = bench.get("period_return")
         if period_return is not None:
@@ -210,20 +251,48 @@ if run_button:
     st.success("✅ Backtest completed successfully!")
 
     st.subheader("⬇️ Export backtest report")
-    export_format = st.selectbox("Export format", ["JSON", "CSV"], key="export_format")
+    export_format = st.selectbox(
+        "Export format",
+        ["Export bundle (JSON)", "Backtest JSON", "CSV"],
+        key="export_format",
+    )
 
-    if export_format == "JSON":
+    backtest_id = result.get("backtest_id", "unknown") if isinstance(result, dict) else "unknown"
+
+    strategy_id_for_export: int = int(selected_strategy_obj.get("id") or selected_id_int)
+
+    export_bundle = {
+        "backtest_id": backtest_id,
+        "strategy": {
+            "id": strategy_id_for_export,
+            "name": selected_strategy_obj.get("name"),
+            "version": selected_strategy_obj.get("version"),
+        },
+        "config": payload.get("config", {}),
+        "metrics": metrics,
+        "equity_curve": equity_curve,
+        "trades": trades,
+        "raw_result": result,
+        "exported_at": dt.datetime.utcnow().isoformat() + "Z",
+    }
+
+    if export_format == "Export bundle (JSON)":
+        json_bytes = json.dumps(export_bundle, default=str, indent=2).encode("utf-8")
+        st.download_button(
+            label="Download export bundle (JSON)",
+            data=json_bytes,
+            file_name=f"export_bundle_{backtest_id}.json",
+            mime="application/json",
+        )
+    elif export_format == "Backtest JSON":
         json_bytes = json.dumps(result, default=str, indent=2).encode("utf-8")
         st.download_button(
             label="Download backtest report (JSON)",
             data=json_bytes,
-            file_name=f"backtest_report_{result.get('backtest_id','unknown')}.json",
+            file_name=f"backtest_report_{backtest_id}.json",
             mime="application/json",
         )
     else:
-        equity_curve = result.get("metrics", {}).get("equity_curve", [])
-        trades = result.get("metrics", {}).get("trades", [])
-
         df_eq = pd.DataFrame(equity_curve)
         df_tr = pd.DataFrame(trades)
 
@@ -235,13 +304,13 @@ if run_button:
             st.download_button(
                 label="Download equity curve (CSV)",
                 data=eq_csv,
-                file_name=f"equity_curve_{result.get('backtest_id','unknown')}.csv",
+                file_name=f"equity_curve_{backtest_id}.csv",
                 mime="text/csv",
             )
         with tr_col:
             st.download_button(
                 label="Download trades (CSV)",
                 data=tr_csv,
-                file_name=f"trades_{result.get('backtest_id','unknown')}.csv",
+                file_name=f"trades_{backtest_id}.csv",
                 mime="text/csv",
             )

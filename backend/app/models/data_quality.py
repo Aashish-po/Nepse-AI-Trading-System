@@ -7,19 +7,20 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 class HolidayCalendar(Base):
     __tablename__ = "holiday_calendar"
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     date: Mapped[datetime.date] = mapped_column(Date, nullable=False, unique=True)
-    description: Mapped[str] = mapped_column(String(255), nullable=True)  # type: ignore[assignment]
+    description: Mapped[str] = mapped_column(String(255), nullable=True)
     is_trading_holiday: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     is_trading_day: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
 
 class DataTrust(Base):
     __tablename__ = "data_trust"
-
     __table_args__ = (
         CheckConstraint("trust_score >= 0.0 AND trust_score <= 1.0", name="ck_trust_score_range"),
+        {"extend_existing": True},
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -27,15 +28,22 @@ class DataTrust(Base):
     date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     trust_score: Mapped[float] = mapped_column(Float, nullable=False)
     trust_version: Mapped[str] = mapped_column(String(20), nullable=False, default="v1")
-    completeness_score: Mapped[float] = mapped_column(Float, nullable=True)  # type: ignore[assignment]
-    volume_anomaly_detected: Mapped[bool] = mapped_column(Boolean, nullable=True)  # type: ignore[assignment]
-    missing_dates_count: Mapped[int] = mapped_column(Integer, nullable=True)  # type: ignore[assignment]
-    rejected_count: Mapped[int] = mapped_column(Integer, nullable=True)  # type: ignore[assignment]
-    details: Mapped[str] = mapped_column(Text, nullable=True)  # type: ignore[assignment]
+    completeness_score: Mapped[float] = mapped_column(Float, nullable=True)
+    volume_anomaly_detected: Mapped[bool] = mapped_column(Boolean, nullable=True)
+    missing_dates_count: Mapped[int] = mapped_column(Integer, nullable=True)
+    rejected_count: Mapped[int] = mapped_column(Integer, nullable=True)
+    details: Mapped[str] = mapped_column(Text, nullable=True)
 
 
 class SourceCorrelation(Base):
     __tablename__ = "source_correlations"
+    __table_args__ = (
+        CheckConstraint(
+            "correlation_score >= 0.0 AND correlation_score <= 1.0",
+            name="ck_correlation_score_range",
+        ),
+        {"extend_existing": True},
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     source_a_id: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -46,19 +54,12 @@ class SourceCorrelation(Base):
     )
     detection_count: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
 
-    __table_args__ = (
-        CheckConstraint(
-            "correlation_score >= 0.0 AND correlation_score <= 1.0",
-            name="ck_correlation_score_range",
-        ),
-    )
-
 
 class EventOverride(Base):
     __tablename__ = "event_overrides"
-
     __table_args__ = (
         CheckConstraint("sensitivity_multiplier > 0", name="ck_sensitivity_positive"),
+        {"extend_existing": True},
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -73,25 +74,26 @@ class EventOverride(Base):
 
 class DataQualityReport(Base):
     __tablename__ = "data_quality_reports"
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     report_date: Mapped[datetime.date] = mapped_column(Date, nullable=False, unique=True)
     total_symbols: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     symbols_passed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     symbols_failed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    avg_trust_score: Mapped[float] = mapped_column(Float, nullable=True)  # type: ignore[assignment]
+    avg_trust_score: Mapped[float] = mapped_column(Float, nullable=True)
     total_rejected_records: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_missing_dates: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_volume_anomalies: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    details: Mapped[str] = mapped_column(Text, nullable=True)  # type: ignore[assignment]
+    details: Mapped[str] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class DataQualityAlert(Base):
     __tablename__ = "data_quality_alerts"
-
     __table_args__ = (
         CheckConstraint("severity IN ('critical', 'warning', 'info')", name="ck_alert_severity"),
+        {"extend_existing": True},
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -100,16 +102,16 @@ class DataQualityAlert(Base):
     date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     severity: Mapped[str] = mapped_column(String(20), nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)
-    details: Mapped[str] = mapped_column(Text, nullable=True)  # type: ignore[assignment]
+    details: Mapped[str] = mapped_column(Text, nullable=True)
     acknowledged: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class SystemModeHistory(Base):
     __tablename__ = "system_mode_history"
-
     __table_args__ = (
         CheckConstraint("mode IN ('NORMAL', 'DEGRADED', 'SAFE_MODE')", name="ck_system_mode"),
+        {"extend_existing": True},
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

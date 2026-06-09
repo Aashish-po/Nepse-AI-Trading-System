@@ -10,9 +10,9 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 class DataSource(Base):
     __tablename__ = "data_sources"
-
     __table_args__ = (
         CheckConstraint("type IN ('api', 'scraper', 'csv')", name="ck_data_sources_type"),
+        {"extend_existing": True},
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -28,9 +28,9 @@ class DataSource(Base):
 
 class IngestionLog(Base):
     __tablename__ = "ingestion_logs"
-
     __table_args__ = (
         CheckConstraint("status IN ('success', 'failed')", name="ck_ingestion_logs_status"),
+        {"extend_existing": True},
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
