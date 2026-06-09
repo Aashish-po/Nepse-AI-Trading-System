@@ -1,3 +1,17 @@
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+# Ensure workspace root is on path for backend.app imports (used in CI)
+_workspace_root = Path(__file__).parent.parent.parent
+_backend_dir = _workspace_root / "backend"
+if str(_workspace_root) not in sys.path:
+    sys.path.insert(0, str(_workspace_root))
+if str(_backend_dir) not in sys.path:
+    sys.path.insert(0, str(_backend_dir))
+
+# ruff: noqa: E402
 from app.api.routes.auth import router as auth_router
 from app.api.routes.data_quality import router as data_quality_router
 from app.api.routes.features import router as features_router

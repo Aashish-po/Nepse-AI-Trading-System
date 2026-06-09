@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,11 +16,27 @@ from numpy.typing import NDArray
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from backend.app.models.feature import Feature
-from backend.app.models.price import Price
-from backend.app.models.stock import Stock
-from ml.feature_vector import build_feature_vector
-from ml.labeling import LabelConfig, create_labels
+# Ensure workspace root is on path for backend.app imports
+_workspace_root = Path(__file__).parent.parent
+_backend_dir = _workspace_root / "backend"
+if str(_workspace_root) not in sys.path:
+    sys.path.insert(0, str(_workspace_root))
+if str(_backend_dir) not in sys.path:
+    sys.path.insert(0, str(_backend_dir))
+
+from ml.feature_vector import build_feature_vector  # noqa: E402
+from ml.labeling import LabelConfig, create_labels  # noqa: E402
+
+
+# Lazy imports to avoid circular dependency with SQLAlchemy metadata
+def _get_models():
+    """Lazy load models to avoid circular import at module load time."""
+    from backend.app.models.feature import Feature
+    from backend.app.models.price import Price
+    from backend.app.models.stock import Stock
+
+    return Feature, Price, Stock
+
 
 logger = logging.getLogger(__name__)
 
@@ -202,6 +219,7 @@ class DatasetBuilder:
         return path
 
     def _query_feature_price_rows(self, symbol: str) -> list[Any]:
+        Feature, Price, Stock = _get_models()
         stock = self._session.scalar(select(Stock).where(Stock.symbol == symbol.upper()))
         if stock is None:
             raise ValueError(f"Stock {symbol} not found")

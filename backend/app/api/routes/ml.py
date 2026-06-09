@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import sys
+from pathlib import Path
 from typing import Annotated, Any
 
 from app.db.session import get_db
@@ -10,11 +12,16 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from ml.dataset import DatasetBuilder
-from ml.evaluation import ModelEvaluator
-from ml.inference import Predictor
-from ml.labeling import LabelConfig
-from ml.training import ModelTrainer
+# Ensure workspace root is on path for ml/ imports
+_workspace_root = Path(__file__).parent.parent.parent.parent
+if str(_workspace_root) not in sys.path:
+    sys.path.insert(0, str(_workspace_root))  # noqa: E402
+
+from ml.dataset import DatasetBuilder  # noqa: E402
+from ml.evaluation import ModelEvaluator  # noqa: E402
+from ml.inference import Predictor  # noqa: E402
+from ml.labeling import LabelConfig  # noqa: E402
+from ml.training import ModelTrainer  # noqa: E402
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["ml"])

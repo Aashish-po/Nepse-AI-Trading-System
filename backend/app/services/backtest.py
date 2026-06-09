@@ -69,7 +69,6 @@ class BacktestEngine:
     ) -> None:
         self.initial_capital = initial_capital
         self.commission_rate = commission_rate
-        self.slippage_rate = partial_fill_threshold
         self.slippage_bps = slippage_bps
         self.min_volume_threshold = min_volume_threshold
         self.partial_fill_threshold = partial_fill_threshold

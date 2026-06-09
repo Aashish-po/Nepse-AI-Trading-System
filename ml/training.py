@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -11,8 +12,23 @@ import joblib
 from sklearn.linear_model import LogisticRegression
 from sqlalchemy.orm import Session
 
-from backend.app.models.model_registry import ModelRegistry
-from ml.dataset import DatasetBundle
+# Ensure workspace root is on path for backend.app imports
+_workspace_root = Path(__file__).parent.parent
+_backend_dir = _workspace_root / "backend"
+if str(_workspace_root) not in sys.path:
+    sys.path.insert(0, str(_workspace_root))
+if str(_backend_dir) not in sys.path:
+    sys.path.insert(0, str(_backend_dir))
+
+from ml.dataset import DatasetBundle  # noqa: E402
+
+
+# Lazy import to avoid circular dependency with SQLAlchemy metadata
+def _get_model_registry():
+    from backend.app.models.model_registry import ModelRegistry  # noqa: E402
+
+    return ModelRegistry
+
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +80,7 @@ class ModelTrainer:
         model_path = self._model_dir / filename
         joblib.dump(model, model_path)
 
+        ModelRegistry = _get_model_registry()
         registry = ModelRegistry(
             name=model_name,
             version=version_tag,

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from datetime import date
 from decimal import Decimal
 
@@ -16,7 +18,7 @@ class PriceIngestRequest(BaseModel):
     volume: int | None = None
 
     @model_validator(mode="after")
-    def validate_price_integrity(self) -> "PriceIngestRequest":
+    def validate_price_integrity(self) -> PriceIngestRequest:
         if self.volume is not None and self.volume < 0:
             raise ValueError("volume must be >= 0")
         values = [v for v in (self.open, self.close) if v is not None]
