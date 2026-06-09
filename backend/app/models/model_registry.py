@@ -11,7 +11,6 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 class ModelRegistry(Base):
     __tablename__ = "models"
-    __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)

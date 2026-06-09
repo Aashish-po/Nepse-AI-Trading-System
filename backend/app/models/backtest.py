@@ -6,7 +6,6 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 class Backtest(Base):
     __tablename__ = "backtests"
-    __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(primary_key=True)
     strategy_id: Mapped[int] = mapped_column(ForeignKey("strategies.id"), nullable=False)

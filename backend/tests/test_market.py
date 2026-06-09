@@ -1,10 +1,9 @@
 from datetime import date
 
 import pytest
+from app.models.price import Price
+from app.models.stock import Stock
 from sqlalchemy.exc import IntegrityError
-
-from backend.app.models.price import Price
-from backend.app.models.stock import Stock
 
 
 def test_create_stock_insert_price_and_query(client) -> None:

@@ -12,7 +12,6 @@ class Price(Base):
     __table_args__ = (
         UniqueConstraint("stock_id", "date", name="uq_prices_stock_id_date"),
         Index("ix_prices_stock_id_date_desc", "stock_id", desc("date")),
-        {"extend_existing": True},
     )
 
     id: Mapped[int] = mapped_column(big_int_pk_type, primary_key=True)

@@ -9,7 +9,6 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 class PortfolioSnapshot(Base):
     __tablename__ = "portfolio_snapshots"
-    __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(big_int_pk_type, primary_key=True)
     backtest_id: Mapped[int] = mapped_column(ForeignKey("backtests.id"), nullable=False)

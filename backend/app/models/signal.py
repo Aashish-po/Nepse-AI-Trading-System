@@ -8,10 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 class Signal(Base):
     __tablename__ = "signals"
-    __table_args__ = (
-        Index("ix_signals_stock_id_date", "stock_id", "date"),
-        {"extend_existing": True},
-    )
+    __table_args__ = (Index("ix_signals_stock_id_date", "stock_id", "date"),)
 
     id: Mapped[int] = mapped_column(big_int_pk_type, primary_key=True)
     stock_id: Mapped[int] = mapped_column(ForeignKey("stocks.id"), nullable=False)

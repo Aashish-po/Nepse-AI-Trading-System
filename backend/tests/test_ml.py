@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -10,7 +9,6 @@ from pathlib import Path
 import app.models  # noqa: F401
 import numpy as np
 import pytest
-from app.db.base import Base
 from app.models.model_registry import ModelRegistry
 from app.models.price import Price
 from app.models.stock import Stock
@@ -19,9 +17,8 @@ from app.services.feature import (
     FEATURE_VERSION,
     FeatureService,
 )
-from sqlalchemy import create_engine, select
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from ml.dataset import DatasetBuilder, DatasetBundle
 from ml.drift_monitoring import CorrelationMonitor, DriftMonitor
@@ -38,25 +35,6 @@ from ml.labeling import LabelConfig, LabelMode, create_labels
 from ml.position_sizing import PositionSizer, SizingMethod
 from ml.risk_manager import RiskManager, StopLossManager
 from ml.training import ModelTrainer
-
-
-@pytest.fixture
-def db_session() -> Iterator[Session]:
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    TestingSessionLocal = sessionmaker(
-        bind=engine,
-        autoflush=False,
-        autocommit=False,
-        class_=Session,
-    )
-    Base.metadata.create_all(bind=engine)
-    with TestingSessionLocal() as session:
-        yield session
-    Base.metadata.drop_all(bind=engine)
 
 
 def _seed_price_series(

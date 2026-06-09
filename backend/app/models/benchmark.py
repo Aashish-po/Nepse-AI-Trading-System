@@ -8,10 +8,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 class NEPSEIndex(Base):
     __tablename__ = "nepse_index"
-    __table_args__ = (
-        Index("ix_nepse_date", "date"),
-        {"extend_existing": True},
-    )
+    __table_args__ = (Index("ix_nepse_date", "date"),)
 
     id: Mapped[int] = mapped_column(big_int_pk_type, primary_key=True)
     date: Mapped[datetime.date] = mapped_column(Date, nullable=False, unique=True)
@@ -27,7 +24,6 @@ class SectorIndex(Base):
     __table_args__ = (
         UniqueConstraint("sector", "date", name="uq_sector_date"),
         Index("ix_sector_sector_date", "sector", "date"),
-        {"extend_existing": True},
     )
 
     id: Mapped[int] = mapped_column(big_int_pk_type, primary_key=True)
