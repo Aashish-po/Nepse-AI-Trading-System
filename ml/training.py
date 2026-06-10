@@ -17,8 +17,7 @@ _backend_dir = Path(__file__).parent.parent / "backend"
 if str(_backend_dir) not in sys.path:
     sys.path.insert(0, str(_backend_dir))
 
-from app.models.model_registry import ModelRegistry  # noqa: E402
-
+from backend.app.models.model_registry import ModelRegistry  # noqa: E402
 from ml.dataset import DatasetBundle  # noqa: E402
 
 logger = logging.getLogger(__name__)
@@ -88,4 +87,94 @@ class ModelTrainer:
             model_version=version_tag,
             metrics=metrics,
             params=params,
+        )
+
+    def get_trained_model(self) -> LogisticRegression:
+        if self._model is None:
+            raise ValueError("No model has been trained yet")
+        return self._model
+
+    def get_model_version(self) -> str:
+        return self._model_version
+
+    def get_model_dir(self) -> Path:
+        return self._model_dir
+
+    def get_model_registry_entry(self, model_name: str) -> ModelRegistry | None:
+        version_tag = f"v{self._model_version}"
+        return (
+            self._session.query(ModelRegistry)
+            .filter_by(name=model_name, version=version_tag)
+            .first()
+        )
+
+    def get_all_model_registry_entries(self, model_name: str) -> list[ModelRegistry]:
+        return (
+            self._session.query(ModelRegistry)
+            .filter_by(name=model_name)
+            .order_by(ModelRegistry.created_at.desc())
+            .all()
+        )
+
+    def get_latest_model_registry_entry(self, model_name: str) -> ModelRegistry | None:
+        entries = self.get_all_model_registry_entries(model_name)
+        if entries:
+            return entries[0]
+        return None
+
+    def get_model_metrics(self, model_name: str) -> dict[str, Any]:
+        entry = self.get_latest_model_registry_entry(model_name)
+        if entry is None:
+            raise ValueError(f"No registry entry found for model {model_name}")
+        return entry.metrics
+
+    def get_model_params(self, model_name: str) -> dict[str, Any]:
+        entry = self.get_latest_model_registry_entry(model_name)
+        if entry is None:
+            raise ValueError(f"No registry entry found for model {model_name}")
+        return entry.params
+
+    def get_model_artifact_path(self, model_name: str) -> str:
+        entry = self.get_latest_model_registry_entry(model_name)
+        if entry is None:
+            raise ValueError(f"No registry entry found for model {model_name}")
+        return entry.model_artifact_path
+
+    def get_model_registry_info(self, model_name: str) -> dict[str, Any]:
+        entry = self.get_latest_model_registry_entry(model_name)
+        if entry is None:
+            raise ValueError(f"No registry entry found for model {model_name}")
+        return {
+            "name": entry.name,
+            "version": entry.version,
+            "feature_version": entry.feature_version,
+            "params": entry.params,
+            "metrics": entry.metrics,
+            "model_artifact_path": entry.model_artifact_path,
+            "created_at": entry.created_at.isoformat(),
+        }
+
+    def get_all_model_registry_info(self, model_name: str) -> list[dict[str, Any]]:
+        entries = self.get_all_model_registry_entries(model_name)
+        return [
+            {
+                "name": entry.name,
+                "version": entry.version,
+                "feature_version": entry.feature_version,
+                "params": entry.params,
+                "metrics": entry.metrics,
+                "model_artifact_path": entry.model_artifact_path,
+                "created_at": entry.created_at.isoformat(),
+            }
+            for entry in entries
+        ]
+
+    def get_model_registry_entry_by_version(
+        self, model_name: str, version: str
+    ) -> ModelRegistry | None:
+        version_tag = f"v{version}"
+        return (
+            self._session.query(ModelRegistry)
+            .filter_by(name=model_name, version=version_tag)
+            .first()
         )

@@ -15,7 +15,7 @@ _backend_dir = _workspace_root / "backend"
 if str(_backend_dir) not in sys.path:
     sys.path.insert(0, str(_backend_dir))
 
-from app.services.feature import FEATURE_REGISTRY  # noqa: E402
+from backend.app.services.feature import FEATURE_REGISTRY  # noqa: E402
 
 FEATURE_ORDER = list(FEATURE_REGISTRY.keys())
 FEATURE_DIM = len(FEATURE_ORDER)

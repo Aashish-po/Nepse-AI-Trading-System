@@ -121,3 +121,46 @@ class TrustScoreMonitor:
             "degradation": avg - recent_avg,
             "below_threshold": recent_avg < self._threshold,
         }
+
+    def check_trust_score_degradation(self, scores: list[float]) -> dict[str, Any]:
+        if not scores:
+            return {"status": "no_data"}
+
+        avg_score = float(np.mean(scores))
+        recent_scores = scores[-30:] if len(scores) >= 30 else scores
+        recent_avg = float(np.mean(recent_scores))
+
+        degradation = avg_score - recent_avg
+        below_threshold = recent_avg < self._threshold
+
+        return {
+            "overall_avg": avg_score,
+            "recent_avg": recent_avg,
+            "degradation": degradation,
+            "below_threshold": below_threshold,
+        }
+
+    def check_correlation_change(
+        self, reference: NDArray[np.float64], current: NDArray[np.float64]
+    ) -> dict[str, Any]:
+        if reference.shape[1] != current.shape[1]:
+            return {"error": "shape_mismatch"}
+
+        ref_corr = np.corrcoef(reference.T)
+        cur_corr = np.corrcoef(current.T)
+
+        corr_change = np.abs(ref_corr - cur_corr)
+        mean_change = float(np.mean(corr_change))
+        max_change = float(np.max(corr_change))
+
+        return {
+            "mean_correlation_change": mean_change,
+            "max_correlation_change": max_change,
+            "significant_change": mean_change > self._threshold,
+        }
+
+    def check_feature_drift(
+        self, reference: dict[str, NDArray[np.float64]], current: dict[str, NDArray[np.float64]]
+    ) -> list[DriftResult]:
+        drift_monitor = DriftMonitor(p_threshold=self._threshold)
+        return drift_monitor.detect(reference, current)

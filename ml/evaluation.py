@@ -73,3 +73,30 @@ class ModelEvaluator:
         peak = np.maximum.accumulate(cumulative)
         drawdown = (cumulative - peak) / np.where(peak == 0, 1.0, peak)
         return float(np.min(drawdown))
+
+    def evaluate(
+        self,
+        model: Any,
+        X: NDArray[np.float64],
+        y_true: NDArray[np.float64],
+        prices: NDArray[np.float64],
+        horizon: int = 5,
+    ) -> dict[str, float]:
+        classification_metrics = self.evaluate_classification(model, X, y_true)
+        y_pred = model.predict(X)
+        trading_metrics = self.evaluate_trading(y_pred, prices, horizon)
+        return {**classification_metrics, **trading_metrics}
+
+    def evaluate_model(
+        self,
+        model: Any,
+        X: NDArray[np.float64],
+        y_true: NDArray[np.float64],
+        prices: NDArray[np.float64],
+        horizon: int = 5,
+    ) -> dict[str, float]:
+        try:
+            return self.evaluate(model, X, y_true, prices, horizon)
+        except Exception as e:
+            logger.exception("Model evaluation failed")
+            raise ValueError("Evaluation failed") from e

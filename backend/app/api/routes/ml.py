@@ -17,119 +17,154 @@ _workspace_root = Path(__file__).parent.parent.parent.parent
 if str(_workspace_root) not in sys.path:
     sys.path.insert(0, str(_workspace_root))  # noqa: E402
 
-from ml.dataset import DatasetBuilder  # noqa: E402
-from ml.evaluation import ModelEvaluator  # noqa: E402
-from ml.inference import Predictor  # noqa: E402
-from ml.labeling import LabelConfig  # noqa: E402
-from ml.training import ModelTrainer  # noqa: E402
-
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["ml"])
 DbSession = Annotated[Session, Depends(get_db)]
 
 
-class TrainRequest(BaseModel):
+# Define request/response models here (lightweight, no ml imports)
+class DatasetBuildRequest(BaseModel):
+    """Request to build a dataset."""
+
+    symbol: str
+    feature_version: str = "v4.0.0"
+
+
+class DatasetBuildResponse(BaseModel):
+    """Response with dataset build result."""
+
+    success: bool
+    message: str
+    bundle_id: str | None = None
+
+
+class ModelTrainRequest(BaseModel):
+    """Request to train a model."""
+
     symbol: str
     model_name: str = "logistic"
-    model_version: str = "1.0.0"
-    feature_version: str = "v4.0.0"
-    horizon: int = 5
-    up_threshold: float = 0.02
-    down_threshold: float = -0.02
-    mode: str = "classification"
 
 
-class TrainResponse(BaseModel):
+class TrainingResponse(BaseModel):
+    """Training result response."""
+
+    success: bool
     symbol: str
     model_name: str
-    model_version: str
-    model_path: str | None = None
-    metrics: dict[str, Any]
+    message: str
 
 
-class PredictRequest(BaseModel):
+class PredictionRequest(BaseModel):
+    """Request to make predictions."""
+
     symbol: str
-    feature_version: str = "v4.0.0"
+    model_name: str = "logistic"
+    model_version: str = "v1.0.0"
+    feature_values: dict[str, Any]
 
 
-class PredictResponse(BaseModel):
-    model_name: str
-    model_version: str
-    prediction: int
-    confidence: float
-    feature_names: list[str]
+class PredictionResponse(BaseModel):
+    """Prediction result."""
+
+    success: bool
+    symbol: str
+    prediction: int | None = None
+    error: str | None = None
 
 
-@router.post("/train", response_model=TrainResponse)
-def train_model(request: TrainRequest, db: DbSession) -> TrainResponse:
-    label_config = LabelConfig(
-        horizon=request.horizon,
-        up_threshold=request.up_threshold,
-        down_threshold=request.down_threshold,
-    )
-    builder = DatasetBuilder(
-        session=db, label_config=label_config, feature_version=request.feature_version
-    )
-    bundle = builder.build(request.symbol)
-
-    trainer = ModelTrainer(session=db, model_version=request.model_version)
-    result = trainer.train_logistic(bundle, model_name=request.model_name)
-
-    evaluator = ModelEvaluator(session=db)
-    test_metrics = evaluator.evaluate_classification(trainer._model, bundle.X_test, bundle.y_test)
-    all_metrics = dict(result.metrics)
-    all_metrics.update(test_metrics)
-
-    return TrainResponse(
-        symbol=request.symbol,
-        model_name=request.model_name,
-        model_version=result.model_version,
-        model_path=result.model_path,
-        metrics=all_metrics,
-    )
+# Routes with lazy imports inside handlers
 
 
-@router.get("/models")
-def list_models(db: DbSession) -> dict[str, Any]:
-    from app.models.model_registry import ModelRegistry
-    from sqlalchemy import select
+@router.post("/datasets/build", response_model=DatasetBuildResponse)
+async def build_dataset(
+    request: DatasetBuildRequest,
+    session: DbSession,
+) -> DatasetBuildResponse:
+    """Build a dataset for a given stock symbol."""
+    try:
+        # Lazy import only when route is called
+        from ml.dataset import DatasetBuilder
 
-    models = db.scalars(select(ModelRegistry).order_by(ModelRegistry.created_at.desc())).all()
-    return {
-        "models": [
-            {
-                "id": m.id,
-                "name": m.name,
-                "version": m.version,
-                "metrics": m.metrics,
-                "created_at": m.created_at.isoformat() if m.created_at else None,
-            }
-            for m in models
-        ]
-    }
+        builder = DatasetBuilder(session=session, feature_version=request.feature_version)
+        bundle = builder.build(request.symbol)
+        return DatasetBuildResponse(
+            success=True,
+            message=f"Dataset built for {request.symbol}",
+            bundle_id=str(bundle.symbol),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        logger.exception(f"Dataset build failed for {request.symbol}")
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
-@router.get("/predict/{symbol}", response_model=PredictResponse)
-def predict(symbol: str, db: DbSession) -> dict[str, Any]:
-    from app.services.feature import FeatureService
+@router.post("/models/train", response_model=TrainingResponse)
+async def train_model(
+    request: ModelTrainRequest,
+    session: DbSession,
+) -> TrainingResponse:
+    """Train ML model for a symbol."""
+    try:
+        # Lazy imports only when route is called
+        from ml.dataset import DatasetBuilder, DatasetBundle
+        from ml.training import ModelTrainer
 
-    fetcher = FeatureService(session=db)
-    latest = fetcher.get_features_list(symbol, limit=1, offset=0)
-    if not latest["features"]:
-        raise HTTPException(status_code=404, detail=f"No features available for {symbol}")
-    feature_values = latest["features"][0]["features"]
-    if not feature_values:
-        raise HTTPException(status_code=404, detail=f"Empty feature set for {symbol}")
+        # Build dataset
+        builder = DatasetBuilder(session=session, feature_version="v4.0.0")
+        bundle: DatasetBundle = builder.build(request.symbol)
 
-    model_name = "logistic"
-    model_version = "1.0.0"
-    predictor = Predictor(model_name=model_name, model_version=model_version)
-    prediction = predictor.predict(feature_values)
+        # Train model
+        trainer = ModelTrainer(session=session)
+        trainer.train_logistic(bundle, model_name=request.model_name)
 
-    return {
-        "model_name": prediction["model_name"],
-        "model_version": prediction["model_version"],
-        "prediction": prediction["prediction"],
-        "confidence": prediction["confidence"],
-        "feature_names": prediction["feature_names"],
-    }
+        return TrainingResponse(
+            success=True,
+            symbol=request.symbol,
+            model_name=request.model_name,
+            message=f"Model trained successfully for {request.symbol}",
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        logger.exception(f"Model training failed for {request.symbol}")
+        raise HTTPException(status_code=500, detail="Training failed") from e
+
+
+@router.post("/models/predict", response_model=PredictionResponse)
+async def predict(
+    request: PredictionRequest,
+) -> PredictionResponse:
+    """Make predictions for a symbol using feature values."""
+    try:
+        # Lazy import only when route is called
+        from ml.inference import Predictor
+
+        predictor = Predictor(model_name=request.model_name, model_version=request.model_version)
+        # Call predict with correct signature: feature_values: dict[str, Any]
+        prediction = predictor.predict(request.feature_values)
+
+        return PredictionResponse(
+            success=True,
+            symbol=request.symbol,
+            prediction=prediction["prediction"],
+        )
+    except Exception as e:
+        logger.exception(f"Prediction failed for {request.symbol}")
+        return PredictionResponse(
+            success=False,
+            symbol=request.symbol,
+            error=str(e),
+        )
+
+
+@router.get("/ml/status")
+async def ml_status() -> dict[str, str]:
+    """Check ML module availability."""
+    try:
+        import importlib.util
+
+        _ = importlib.util.find_spec("ml.dataset")
+        return {"status": "available", "message": "ML modules ready"}
+    except ImportError as e:
+        return {"status": "unavailable", "message": f"ML modules not loaded: {e}"}
