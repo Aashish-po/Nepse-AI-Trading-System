@@ -10,5 +10,9 @@
     "python.formatting.provider": "none",
     "[python]": {
         "editor.defaultFormatter": "charliermarsh.ruff"
-    }
+    },
+    "python.analysis.extraPaths": [
+        "backend"
+    ],
+    "python.defaultInterpreterPath": ".venv/Scripts/python.exe"
 }

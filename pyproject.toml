@@ -100,3 +100,18 @@ indent-style = "space"
 "alembic/*" = ["E501", "F401"]
 
 
+[tool.pylance]
+pythonPath = "backend"
+pythonVersion = "3.11"
+
+[tool.pyright]
+extraPaths = ["backend"]
+pythonVersion = "3.11"
+pythonPlatform = "Windows"
+
+[tool.mypy]
+pythonVersion = "3.11"
+mypy_path = "backend"
+ignore_missing_imports = true
+
+

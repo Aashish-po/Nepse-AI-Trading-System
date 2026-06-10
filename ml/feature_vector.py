@@ -9,13 +9,16 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-# Ensure backend is on path for app.* imports
+# Ensure both workspace root and backend directory are on path
 _workspace_root = Path(__file__).parent.parent
 _backend_dir = _workspace_root / "backend"
+
 if str(_backend_dir) not in sys.path:
     sys.path.insert(0, str(_backend_dir))
+if str(_workspace_root) not in sys.path:
+    sys.path.insert(0, str(_workspace_root))
 
-from backend.app.services.feature import FEATURE_REGISTRY  # noqa: E402
+from app.services.feature import FEATURE_REGISTRY  # noqa: E402
 
 FEATURE_ORDER = list(FEATURE_REGISTRY.keys())
 FEATURE_DIM = len(FEATURE_ORDER)

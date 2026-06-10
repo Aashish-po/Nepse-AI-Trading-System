@@ -1,32 +1,43 @@
-"""Dataset builder for supervised ML training."""
+"""Dataset building and walk-forward validation for ML training."""
 
+# ruff: noqa: E402
 from __future__ import annotations
 
 import logging
 import sys
-from collections.abc import Iterator
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import numpy as np
+from numpy.typing import NDArray
+
+# MUST be at the very top before any other imports
+_workspace_root = Path(__file__).parent.parent
+_backend_dir = _workspace_root / "backend"
+
+if str(_backend_dir) not in sys.path:
+    sys.path.insert(0, str(_backend_dir))
+if str(_workspace_root) not in sys.path:
+    sys.path.insert(0, str(_workspace_root))
+
+# Now safe to import everything else
+import pathlib as pathlib
+import sys
+from collections.abc import Iterator
+from dataclasses import dataclass
+from typing import Any
+
 import pyarrow as pa
 import pyarrow.parquet as pq
-from numpy.typing import NDArray
+from app.models.feature import Feature
+from app.models.price import Price
+from app.models.stock import Stock
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-# Ensure backend is on path for app.* imports
-_backend_dir = Path(__file__).parent.parent / "backend"
-if str(_backend_dir) not in sys.path:
-    sys.path.insert(0, str(_backend_dir))
+from ml.feature_vector import build_feature_vector
+from ml.labeling import LabelConfig, create_labels
 
-# Model imports at module level to avoid SQLAlchemy MetaData collision
-from backend.app.models.feature import Feature  # noqa: E402
-from backend.app.models.price import Price  # noqa: E402
-from backend.app.models.stock import Stock  # noqa: E402
-from ml.feature_vector import build_feature_vector  # noqa: E402
-from ml.labeling import LabelConfig, create_labels  # noqa: E402
+# ... rest of ml/dataset.py continues unchanged ...
 
 logger = logging.getLogger(__name__)
 ARTIFACTS_DIR = Path(__file__).resolve().parent.parent / "artifacts"

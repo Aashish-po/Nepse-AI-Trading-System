@@ -1,24 +1,34 @@
-"""Model training and registration."""
+"""ML model training and evaluation."""
 
+# ruff: noqa: E402
 from __future__ import annotations
 
 import logging
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 import joblib
+
+# MUST be at the very top before any other imports
+_workspace_root = Path(__file__).parent.parent
+_backend_dir = _workspace_root / "backend"
+
+if str(_backend_dir) not in sys.path:
+    sys.path.insert(0, str(_backend_dir))
+if str(_workspace_root) not in sys.path:
+    sys.path.insert(0, str(_workspace_root))
+
+# Now safe to import everything else
+from typing import Any
+
+from app.models.model_registry import ModelRegistry
 from sklearn.linear_model import LogisticRegression
 from sqlalchemy.orm import Session
 
-# Ensure backend is on path for app.* imports
-_backend_dir = Path(__file__).parent.parent / "backend"
-if str(_backend_dir) not in sys.path:
-    sys.path.insert(0, str(_backend_dir))
+from ml.dataset import DatasetBundle
 
-from backend.app.models.model_registry import ModelRegistry  # noqa: E402
-from ml.dataset import DatasetBundle  # noqa: E402
+# ... rest of ml/training.py continues unchanged ...
 
 logger = logging.getLogger(__name__)
 
