@@ -40,10 +40,9 @@ jobs:
 
       - name: API import smoke test
         run: |
-          python -c "from app.main import create_app; app = create_app(); print('App title:', app.title)"
-        working-directory: backend
+          python -c "from backend.app.main import create_app; app = create_app(); print('App title:', app.title)"
         env:
-          PYTHONPATH: ${{ github.workspace }}/backend
+          PYTHONPATH: ${{ github.workspace }}
 
       - name: ML module import smoke test
         run: |
