@@ -2,9 +2,12 @@
 .env
 .env.*
 !.env.example
-.env.example
 .kilonix/
 secrets/
+.streamlit/
+dashboard/.streamlit/secrets.toml
+!dashboard/.streamlit/config.toml
+
 
 
 # Python virtual environments
