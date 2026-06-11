@@ -21,7 +21,7 @@ class SymbolQualitySummaryResponse(BaseModel):
     warning_days: int
     excellent_days: int
     unsafe_pct: float
-    common_issues: list[tuple[str, int]]
+    common_issues: list[list] | None = None
 
 
 class DataQualityReportResponse(BaseModel):
@@ -34,6 +34,9 @@ class DataQualityReportResponse(BaseModel):
     total_rejected_records: int
     total_missing_dates: int
     total_volume_anomalies: int
+    completeness_score: float = 0.0
+    validation_pass_rate: float = 0.0
+    quality_by_symbol: list[dict] = []
 
 
 class DataQualityAlertResponse(BaseModel):

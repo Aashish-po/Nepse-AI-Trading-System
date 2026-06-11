@@ -17,6 +17,7 @@ from app.api.routes.data_quality import router as data_quality_router
 from app.api.routes.features import router as features_router
 from app.api.routes.health import router as health_router
 from app.api.routes.market import router as market_router
+from app.api.routes.signals import router as signals_router
 from app.api.routes.strategies import router as strategies_router
 from app.core.logging import configure_logging
 from fastapi import FastAPI
@@ -38,6 +39,7 @@ def create_app() -> FastAPI:
     app.include_router(features_router)
     app.include_router(health_router)
     app.include_router(market_router)
+    app.include_router(signals_router)
     app.include_router(strategies_router)
 
     # LAZY-LOAD ml_router to avoid circular imports

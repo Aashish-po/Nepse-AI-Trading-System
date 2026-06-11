@@ -198,6 +198,7 @@ class DataQualityService:
             total_missing = 0
             total_anomalies = 0
             trust_scores: list[float] = []
+            quality_by_symbol: list[dict] = []
 
             for stock in stocks:
                 result = self.evaluate_symbol_date(
@@ -213,8 +214,19 @@ class DataQualityService:
                 total_missing += d.get("missing_dates_count", 0) or 0
                 if d.get("volume_anomaly"):
                     total_anomalies += 1
+                quality_by_symbol.append(
+                    {
+                        "symbol": stock.symbol,
+                        "trust_score": result.get("trust_score", 0.0),
+                        "status": result.get("status", "unknown"),
+                    }
+                )
 
             avg_trust = sum(trust_scores) / len(trust_scores) if trust_scores else 0.0
+            # Calculate completeness and validation pass rate
+            completeness_score = avg_trust  # Use trust score as proxy
+            validation_pass_rate = passed / total_symbols if total_symbols > 0 else 0.0
+
             report = DataQualityReport(
                 report_date=target_date,
                 total_symbols=total_symbols,
@@ -246,6 +258,9 @@ class DataQualityService:
                 "total_rejected_records": total_rejected,
                 "total_missing_dates": total_missing,
                 "total_volume_anomalies": total_anomalies,
+                "completeness_score": completeness_score,
+                "validation_pass_rate": validation_pass_rate,
+                "quality_by_symbol": quality_by_symbol,
             }
         finally:
             if owns_session:
