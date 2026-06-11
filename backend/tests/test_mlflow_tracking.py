@@ -68,10 +68,8 @@ class FakeMLflow:
     def log_metrics(self, metrics: dict[str, float]) -> None:
         self.metrics = metrics
 
-    def log_artifact(self, artifact_path: str, artifact_path_name: str | None = None) -> None:
-        self.artifacts.append(
-            {"artifact_path": artifact_path, "artifact_path_name": artifact_path_name or ""}
-        )
+    def log_artifact(self, path: str, artifact_path: str | None = None) -> None:
+        self.artifacts.append({"artifact_path": path, "artifact_path_name": artifact_path or ""})
 
     def log_artifacts(self, artifact_dir: str, artifact_path: str | None = None) -> None:
         self.artifacts.append(
@@ -216,7 +214,7 @@ def test_log_model_training_success_with_mock_mlflow(tmp_path, monkeypatch) -> N
     assert fake_mlflow.runs == [{"experiment_id": "exp-123", "run_name": "logistic_v1.0.0"}]
     assert fake_mlflow.params["model_name"] == "logistic"
     assert fake_mlflow.params["feature_version"] == "v4.0.0"
-    assert fake_mlflow.params["train_size"] == "70"
+    assert fake_mlflow.params["train_size"] == 70
     assert fake_mlflow.params["max_iter"] == "1000"
     assert fake_mlflow.metrics["val_accuracy"] == 0.82
     assert fake_mlflow.artifacts[0]["artifact_path_name"] == "model"
