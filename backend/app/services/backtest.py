@@ -20,6 +20,7 @@ from app.models.strategy import Strategy
 from app.models.trade import Trade
 from app.services.data_quality_gate import DataQualityGate
 from app.services.feature import FeatureService
+from app.services.mlflow_tracking import mlflow_tracker
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -578,6 +579,7 @@ class BacktestService:
                 start_date=config.get("start_date"),
                 end_date=config.get("end_date"),
             )
+            result = self._json_safe_metrics(result)
 
             backtest.metrics = result
             session.commit()
@@ -585,6 +587,20 @@ class BacktestService:
             self._persist_trades_and_snapshots(
                 session, backtest.id, result["equity_curve"], result["trades"]
             )
+
+            try:
+                mlflow_tracker.log_backtest(
+                    backtest_id=backtest.id,
+                    strategy_id=strategy_id,
+                    strategy_name=strategy.name,
+                    strategy_version=strategy.version,
+                    config=config,
+                    metrics=result,
+                    strategy_config=strategy.config,
+                    symbol_count=len(symbols),
+                )
+            except Exception as exc:
+                logger.warning("MLflow backtest logging failed: %s", exc)
 
             return {
                 "backtest_id": backtest.id,
@@ -594,6 +610,15 @@ class BacktestService:
         finally:
             if owns_session:
                 session.close()
+
+    def _json_safe_metrics(self, value: Any) -> Any:
+        if isinstance(value, Decimal):
+            return float(value)
+        if isinstance(value, Mapping):
+            return {key: self._json_safe_metrics(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [self._json_safe_metrics(item) for item in value]
+        return value
 
     def _persist_trades_and_snapshots(
         self,

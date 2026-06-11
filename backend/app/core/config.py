@@ -40,9 +40,17 @@ class Settings(BaseSettings):
         default="redis://localhost:6379/0",
         validation_alias=AliasChoices("REDIS_URL", "redis_url"),
     )
+    mlflow_enabled: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("MLFLOW_ENABLED", "mlflow_enabled"),
+    )
     mlflow_tracking_uri: str = Field(
-        default="http://localhost:5000",
+        default="file:./mlruns",
         validation_alias=AliasChoices("MLFLOW_TRACKING_URI", "mlflow_tracking_uri"),
+    )
+    mlflow_experiment_prefix: str = Field(
+        default="",
+        validation_alias=AliasChoices("MLFLOW_EXPERIMENT_PREFIX", "mlflow_experiment_prefix"),
     )
 
     nepse_primary_data_source_url: str = Field(

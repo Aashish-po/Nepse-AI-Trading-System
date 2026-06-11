@@ -23,6 +23,7 @@ if str(_workspace_root) not in sys.path:
 from typing import Any
 
 from app.models.model_registry import ModelRegistry
+from app.services.mlflow_tracking import mlflow_tracker
 from sklearn.linear_model import LogisticRegression
 from sqlalchemy.orm import Session
 
@@ -90,6 +91,23 @@ class ModelTrainer:
         )
         self._session.add(registry)
         self._session.commit()
+
+        try:
+            mlflow_tracker.log_model_training(
+                model_name=model_name,
+                model_version=version_tag,
+                feature_version=bundle.feature_version,
+                symbol=bundle.symbol,
+                split_sizes={
+                    "train_size": int(X_train.shape[0]),
+                    "val_size": int(X_val.shape[0]),
+                    "test_size": int(bundle.X_test.shape[0]),
+                },
+                metrics=metrics,
+                model_path=model_path,
+            )
+        except Exception as exc:
+            logger.warning("MLflow model training logging failed: %s", exc)
 
         logger.info("Trained %s %s on %d samples", model_name, version_tag, X_train.shape[0])
         return TrainingResult(
