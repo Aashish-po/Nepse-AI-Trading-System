@@ -49,6 +49,7 @@ data/reports/
 artifacts/
 reports/
 exports/
+docs/
 
 
 # ML and experiment tracking outputs
@@ -101,6 +102,13 @@ PLANS_Phase_6.md
 PLAN.md
 .qodo/
 .kilo/
+phase.md
+agenda.md
+Architecture.md
+AGENTS.md
+
+
+
 
 
 
