@@ -1,0 +1,30 @@
+# Streamlit configuration for NEPSE AI Trading Dashboard
+
+[theme]
+primaryColor = "#0EA5E9"
+backgroundColor = "#0F172A"
+secondaryBackgroundColor = "#1E293B"
+textColor = "#F8FAFC"
+font = "sans serif"
+
+[client]
+showErrorDetails = true
+toolbarMode = "auto"
+
+[logger]
+level = "info"
+
+[server]
+port = 8501
+headless = true
+runOnSave = true
+maxUploadSize = 200
+enableXsrfProtection = true
+
+[browser]
+gatherUsageStats = false
+serverAddress = "localhost"
+
+[ui]
+hideTopBar = false
+hideSidebarNav = false

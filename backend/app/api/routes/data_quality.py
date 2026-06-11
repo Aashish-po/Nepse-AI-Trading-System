@@ -143,3 +143,9 @@ def apply_trust_decay(db: DbSession, days_threshold: int = 30, decay_factor: flo
     service = DataQualityService(session=db)
     count = service.apply_trust_decay(days_threshold=days_threshold, decay_factor=decay_factor)
     return {"decayed_records": count}
+
+
+@router.get("/history/{symbol}")
+def get_trust_history(symbol: str, db: DbSession, days: int = 30) -> dict:
+    service = DataQualityService(session=db)
+    return service.get_symbol_trust_trend(symbol, window=days)
