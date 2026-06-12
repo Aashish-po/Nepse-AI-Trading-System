@@ -249,7 +249,7 @@ The dashboard expects the backend to provide these endpoints:
 
 - `_safe_int()` → Graceful int conversion
 - `_safe_float()` → Graceful float conversion
-- `_format_currency()` → Format large numbers (₹K, ₹M, ₹B)
+- `_format_currency()` → Format large numbers (Rs.K, Rs.M, Rs.B)
 - `_format_percentage()` → Add color indicators (+/-)
 
 ### API Wrappers

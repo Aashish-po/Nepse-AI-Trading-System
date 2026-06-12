@@ -19,7 +19,7 @@ Monitor real-time market conditions, data quality metrics, and signal distributi
 ```
 ┌────────────────────┬────────────────────┬──────────────────┬─────────────────┐
 │  NSE Index         │  Tracked Symbols   │  Total Volume    │  Active Signals │
-│  Value: 2,450.50   │  117               │  ₹4.2B          │  18             │
+│  Value: 2,450.50   │  117               │  Rs.4.2B          │  18             │
 │  Δ +1.2%           │  Δ +2              │  Δ +15.8%        │  Δ +3           │
 └────────────────────┴────────────────────┴──────────────────┴─────────────────┘
 ```
@@ -221,14 +221,14 @@ Execute historical backtests with full performance analysis and benchmark compar
 
 **Input Fields**:
 
-- **Initial Capital**: Starting portfolio value (₹)
+- **Initial Capital**: Starting portfolio value (Rs.)
   - Default: 1,000,000
   - Range: 100,000 → 100,000,000
 
 - **Commission Rate**: Per-transaction cost (decimal)
   - Default: 0.005 (0.5%)
   - Typical range: 0.002 → 0.01
-  - Example: Trade ₹100,000 with 0.5% commission = ₹500 fee
+  - Example: Trade Rs.100,000 with 0.5% commission = Rs.500 fee
 
 - **Slippage**: Execution slippage in basis points
   - Default: 5 bps (0.05%)
@@ -264,7 +264,7 @@ Execute historical backtests with full performance analysis and benchmark compar
 
 ┌────────────────────┬───────────────────┬──────────────────┬───────────────────┐
 │ Profit Factor      │ Expectancy        │ Total Trades     │ Winning Trades    │
-│ 2.1x               │ ₹1,250.50         │ 42               │ 26 (61.9%)        │
+│ 2.1x               │ Rs.1,250.50         │ 42               │ 26 (61.9%)        │
 │ Gross P/L ratio    │ Avg profit/trade  │ Trades executed  │ Number of winners │
 └────────────────────┴───────────────────┴──────────────────┴───────────────────┘
 ```
@@ -278,7 +278,7 @@ Execute historical backtests with full performance analysis and benchmark compar
 | **Max Drawdown** | (Trough - Peak) / Peak | Worst peak-to-trough decline | >-20% (acceptable) |
 | **Win Rate** | Winning Trades / Total Trades | % of profitable trades | >50% (positive expectancy) |
 | **Profit Factor** | Gross Profit / Gross Loss | Total P/L ratio | >1.5 (good), >2.0 (strong) |
-| **Expectancy** | (Win% × Avg Win) - (Loss% × Avg Loss) | Average profit per trade | >₹0 (positive) |
+| **Expectancy** | (Win% × Avg Win) - (Loss% × Avg Loss) | Average profit per trade | >Rs.0 (positive) |
 | **Total Trades** | Count of all executed trades | Trade frequency | Depends on strategy |
 | **Winning Trades** | Count of profitable trades | Success count | Should correlate with Win Rate |
 
@@ -291,7 +291,7 @@ Execute historical backtests with full performance analysis and benchmark compar
 **Features**:
 
 - X-axis: Date (scroll, zoom, hover)
-- Y-axis: Portfolio equity value (₹)
+- Y-axis: Portfolio equity value (Rs.)
 - Hover data: Exact equity on each date
 - Zoom: Click and drag to zoom into date ranges
 - Reset: Double-click to reset zoom
@@ -337,7 +337,7 @@ Drawdown% = (Current Equity - Rolling Peak) / Rolling Peak × 100
 **Columns**:
 
 ```
-Entry Date │ Entry Price │ Exit Date  │ Exit Price │ Qty │ P&L (₹) │ P&L (%) │ Duration
+Entry Date │ Entry Price │ Exit Date  │ Exit Price │ Qty │ P&L (Rs.) │ P&L (%) │ Duration
 -----------|------------|------------|-----------|-----|---------|---------|----------
 2020-01-05 │ 100.50     │ 2020-01-10 │ 105.75   │ 100 │ +525.00 │ +5.23% │ 5 days
 2020-01-15 │ 98.75      │ 2020-01-22 │ 96.25    │ 100 │ -250.00 │ -2.53% │ 7 days

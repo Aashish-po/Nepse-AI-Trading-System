@@ -107,7 +107,7 @@ st.markdown(
 # API & CONFIG
 # ============================================================================
 
-API_BASE = st.secrets.get("API_BASE", "http://localhost:8000/api/v1")
+API_BASE = st.secrets.get("API_BASE", "http://localhost:8000")
 
 EXPORT_DIR = Path("exports")
 EXPORT_DIR.mkdir(parents=True, exist_ok=True)
@@ -168,12 +168,12 @@ def _safe_float(value: object, default: float = 0.0) -> float:
 def _format_currency(value: float) -> str:
     """Format value as currency."""
     if abs(value) >= 1e9:
-        return f"₹{value / 1e9:.2f}B"
+        return f"Rs.{value / 1e9:.2f}B"
     elif abs(value) >= 1e6:
-        return f"₹{value / 1e6:.2f}M"
+        return f"Rs.{value / 1e6:.2f}M"
     elif abs(value) >= 1e3:
-        return f"₹{value / 1e3:.2f}K"
-    return f"₹{value:.2f}"
+        return f"Rs.{value / 1e3:.2f}K"
+    return f"Rs.{value:.2f}"
 
 
 def _format_percentage(value: float, decimals: int = 2) -> str:
@@ -472,7 +472,7 @@ def page_backtesting():
     st.sidebar.header("⚙️ Backtest Config")
 
     initial_capital = st.sidebar.number_input(
-        "Initial Capital (₹)", value=1000000, step=100000, help="Starting portfolio value"
+        "Initial Capital (Rs.)", value=1000000, step=100000, help="Starting portfolio value"
     )
 
     commission = st.sidebar.number_input(
@@ -636,7 +636,7 @@ def page_backtesting():
                 fig_equity.update_layout(
                     title="Portfolio Equity Over Time",
                     xaxis_title="Date",
-                    yaxis_title="Equity (₹)",
+                    yaxis_title="Equity (Rs.)",
                     hovermode="x unified",
                     plot_bgcolor="rgba(0,0,0,0)",
                     paper_bgcolor="rgba(0,0,0,0)",
@@ -762,7 +762,7 @@ def page_backtesting():
                     fig_comp.update_layout(
                         title="Strategy vs Benchmark",
                         xaxis_title="Date",
-                        yaxis_title="Equity (₹)",
+                        yaxis_title="Equity (Rs.)",
                         hovermode="x unified",
                         plot_bgcolor="rgba(0,0,0,0)",
                         paper_bgcolor="rgba(0,0,0,0)",
@@ -776,7 +776,13 @@ def page_backtesting():
         st.subheader("⬇️ Export Results")
         export_format = st.selectbox(
             "Export Format",
-            ["Bundle (JSON)", "Report (JSON)", "Equity Curve (CSV)", "Trades (CSV)"],
+            [
+                "Bundle (JSON)",
+                "Report (JSON)",
+                "Equity Curve (CSV)",
+                "Trades (CSV)",
+                "Equity Curve (HTML)",
+            ],
             key="export_fmt",
         )
 
@@ -809,6 +815,21 @@ def page_backtesting():
                 mime="application/json",
             )
 
+        elif export_format == "Equity Curve (HTML)":
+            if equity_curve:
+                df_eq = pd.DataFrame(equity_curve)
+                html_bytes = df_eq.to_html(index=False, border=0, classes="equity-table").encode(
+                    "utf-8"
+                )
+                st.download_button(
+                    label="📥 Equity Curve HTML",
+                    data=html_bytes,
+                    file_name=f"equity_{backtest_id}.html",
+                    mime="text/html",
+                )
+            else:
+                st.info("No equity curve data to export.")
+
         else:
             col1, col2 = st.columns(2)
 
@@ -836,6 +857,175 @@ def page_backtesting():
 
 
 # ============================================================================
+# PAGE: SIGNALS
+# ============================================================================
+
+
+@st.cache_data(ttl=60)
+def load_signals(date_str: str) -> list[dict]:
+    """Load signals for a specific date."""
+    try:
+        res = requests.get(f"{API_BASE}/signals/heatmap/{date_str}", timeout=10)
+        res.raise_for_status()
+        data = res.json()
+        return data.get("heat_data", []) if isinstance(data, dict) else []
+    except Exception:
+        return []
+
+
+def page_signals():
+    """Signal visualization and management."""
+    st.header("📈 Signals")
+
+    signals_date = st.text_input(
+        "Signals Date (YYYY-MM-DD)", value=dt.date.today().isoformat(), key="signals_date"
+    )
+
+    if st.button("Load Signals", key="load_signals"):
+        signals = load_signals(signals_date)
+        if signals:
+            df_signals = pd.DataFrame(signals)
+            st.dataframe(df_signals, use_container_width=True, height=400)
+
+            # Signal distribution chart
+            if "signal_type" in df_signals.columns:
+                signal_counts = df_signals.groupby("signal_type").size()
+                fig = go.Figure(data=[go.Bar(x=signal_counts.index, y=signal_counts.values)])
+                fig.update_layout(
+                    title="Signal Distribution", xaxis_title="Signal Type", yaxis_title="Count"
+                )
+                st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No signals found for this date.")
+
+
+# ============================================================================
+# PAGE: FEATURES
+# ============================================================================
+
+
+@st.cache_data(ttl=60)
+def load_features(symbol: str) -> dict | None:
+    """Load feature generation status for a symbol."""
+    try:
+        res = requests.get(f"{API_BASE}/features/generate/{symbol}", timeout=10)
+        if res.status_code == 200:
+            return res.json()
+        return None
+    except Exception:
+        return None
+
+
+def page_features():
+    """Feature generation and analysis."""
+    st.header("🔧 Features")
+
+    symbol = st.text_input("Symbol", value="NABIL", key="features_symbol")
+
+    if st.button("Generate Features", key="gen_features"):
+        with st.spinner("Generating features..."):
+            features = load_features(symbol)
+            if features:
+                st.json(features)
+            else:
+                st.warning(
+                    "No feature data available. Feature generation endpoint not implemented."
+                )
+
+
+# ============================================================================
+# PAGE: DATA SOURCES
+# ============================================================================
+
+
+@st.cache_data(ttl=60)
+def load_data_sources() -> list[dict]:
+    """Load data sources information."""
+    try:
+        res = requests.get(f"{API_BASE}/data-quality/mode-history", timeout=10)
+        if res.status_code == 200:
+            return res.json()
+        return []
+    except Exception:
+        return []
+
+
+def page_data_sources():
+    """Data source management and monitoring."""
+    st.header("📡 Data Sources")
+
+    sources = load_data_sources()
+    if sources:
+        st.dataframe(pd.DataFrame(sources), use_container_width=True, height=300)
+    else:
+        st.info("No data source history available.")
+
+
+# ============================================================================
+# PAGE: ALERTS
+# ============================================================================
+
+
+@st.cache_data(ttl=60)
+def load_alerts() -> list[dict]:
+    """Load data quality alerts."""
+    try:
+        res = requests.get(f"{API_BASE}/data-quality/alerts", timeout=10)
+        if res.status_code == 200:
+            return res.json()
+        return []
+    except Exception:
+        return []
+
+
+def page_alerts():
+    """Alert monitoring and acknowledgment."""
+    st.header("🔔 Alerts")
+
+    alerts = load_alerts()
+    if alerts:
+        df_alerts = pd.DataFrame(alerts)
+        if "acknowledged" in df_alerts.columns:
+            df_alerts["acknowledged"] = df_alerts["acknowledged"].map({True: "Yes", False: "No"})
+        st.dataframe(df_alerts, use_container_width=True, height=400)
+    else:
+        st.info("No alerts found.")
+
+
+# ============================================================================
+# PAGE: SYSTEM STATUS
+# ============================================================================
+
+
+@st.cache_data(ttl=30)
+def load_health_status() -> dict | None:
+    """Load system health."""
+    try:
+        res = requests.get(f"{API_BASE}/health", timeout=5)
+        res.raise_for_status()
+        return res.json()
+    except Exception:
+        return None
+
+
+def page_system_status():
+    """System status and health monitoring."""
+    st.header("🖥️ System Status")
+
+    health = load_health_status()
+    if health:
+        st.json(health)
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Status", str(health.get("status", "unknown")).upper())
+        with col2:
+            st.metric("Environment", health.get("environment", "unknown"))
+    else:
+        st.error("System unavailable.")
+
+
+# ============================================================================
 # MAIN APP
 # ============================================================================
 
@@ -858,8 +1048,26 @@ def main():
 
         page = option_menu(
             "Navigation",
-            ["📊 Market Overview", "🎯 Strategies", "🧪 Backtesting"],
-            icons=["graph-up", "bullseye", "flask"],
+            [
+                "📊 Market Overview",
+                "🎯 Strategies",
+                "🧪 Backtesting",
+                "📈 Signals",
+                "🔧 Features",
+                "📡 Data Sources",
+                "🔔 Alerts",
+                "🖥️ System Status",
+            ],
+            icons=[
+                "graph-up",
+                "bullseye",
+                "flask",
+                "bar-chart",
+                "gear",
+                "hdd-network",
+                "bell",
+                "display",
+            ],
             menu_icon="list",
             default_index=0,
         )
@@ -871,6 +1079,16 @@ def main():
         page_strategies()
     elif page == "🧪 Backtesting":
         page_backtesting()
+    elif page == "📈 Signals":
+        page_signals()
+    elif page == "🔧 Features":
+        page_features()
+    elif page == "📡 Data Sources":
+        page_data_sources()
+    elif page == "🔔 Alerts":
+        page_alerts()
+    elif page == "🖥️ System Status":
+        page_system_status()
 
     # Footer
     st.divider()
