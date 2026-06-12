@@ -7,6 +7,8 @@ SEED_SYMBOLS = [
     {"symbol": "GBIME", "name": "Global IME Bank Limited", "sector": "Commercial Banks"},
     {"symbol": "NLIC", "name": "Nepal Life Insurance Company Limited", "sector": "Life Insurance"},
     {"symbol": "UPPER", "name": "Upper Tamakoshi Hydropower Limited", "sector": "Hydropower"},
+    {"symbol": "NRIC", "name": "Rastriya Beema Sansthan", "sector": "Non-Life Insurance"},
+    {"symbol": "NIBLPF", "name": "NIBL Pragati Fund", "sector": "Mutual Funds"},
 ]
 
 

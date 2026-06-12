@@ -16,6 +16,7 @@ from app.models.price import Price
 from app.models.signal import Signal
 from app.models.stock import Stock
 from app.models.strategy import Strategy
+from app.models.telegram import TelegramDailyAlert
 from app.models.trade import Trade
 from app.models.user import User
 
@@ -40,6 +41,7 @@ __all__ = [
     "Stock",
     "Strategy",
     "SystemModeHistory",
+    "TelegramDailyAlert",
     "Trade",
     "User",
 ]

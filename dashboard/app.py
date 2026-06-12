@@ -112,6 +112,32 @@ API_BASE = st.secrets.get("API_BASE", "http://localhost:8000")
 EXPORT_DIR = Path("exports")
 EXPORT_DIR.mkdir(parents=True, exist_ok=True)
 
+
+# ============================================================================
+# BACKEND AVAILABILITY / HEALTH
+# ============================================================================
+
+
+def backend_health() -> dict | None:
+    """Check backend /health endpoint."""
+    try:
+        res = requests.get(f"{API_BASE}/health", timeout=5)
+        res.raise_for_status()
+        data = res.json()
+        return data if isinstance(data, dict) else None
+    except Exception:
+        return None
+
+
+def require_backend_or_safe_mode() -> bool:
+    """Return True if backend reachable; else show safe-mode banner and return False."""
+    health = backend_health()
+    if not health:
+        st.error("Backend unavailable (GET /health failed). Please start backend API.")
+        return False
+    return True
+
+
 # ============================================================================
 # UTILITY FUNCTIONS
 # ============================================================================
@@ -817,9 +843,17 @@ def page_backtesting():
 def main():
     """Main application entry point."""
 
+    # Startup backend check (Phase 6 validation hardening)
+    if not require_backend_or_safe_mode():
+        st.warning("🛡️ Safe Mode: read-only UI. Backend is required for interactive data.")
+        st.stop()
+
     # Navigation menu
     with st.sidebar:
-        st.image("https://via.placeholder.com/200x50?text=NEPSE+AI", use_container_width=True)
+        st.image(
+            "https://images.unsplash.com/photo-1507679799987-c73779587ccf?ixlib=rb-4.0.3&auto=format&fit=crop&w=1470&q=80",
+            caption="NEPSE AI Trading System",
+        )
         st.divider()
 
         page = option_menu(
@@ -841,6 +875,28 @@ def main():
     # Footer
     st.divider()
     st.caption(f"NEPSE AI Trading System • {dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+    st.markdown(
+        """
+        <style>
+            .stApp {
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            }""",
+        unsafe_allow_html=True,
+    )
+
+    st.info(
+        "This dashboard is a prototype for monitoring and analyzing trading strategies. "
+        "All data is sourced from the backend API. Ensure the backend is running for full functionality."
+    )
+
+    st.success(
+        "Welcome to the NEPSE AI Trading Dashboard! Explore market data, manage strategies, and run backtests with ease."
+    )
+    st.image(
+        "https://images.unsplash.com/photo-1507679799987-c73779587ccf?ixlib=rb-4.0.3&auto=format&fit=crop&w=1470&q=80",
+        caption="Visualize your trading performance with our interactive dashboard.",
+    )
 
 
 if __name__ == "__main__":
