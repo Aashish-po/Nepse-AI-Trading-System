@@ -107,7 +107,7 @@ st.markdown(
 # API & CONFIG
 # ============================================================================
 
-API_BASE = st.secrets.get("API_BASE", "http://localhost:8000")
+API_BASE = st.secrets.get("API_BASE", "http://localhost:8000/api/v1")
 
 EXPORT_DIR = Path("exports")
 EXPORT_DIR.mkdir(parents=True, exist_ok=True)

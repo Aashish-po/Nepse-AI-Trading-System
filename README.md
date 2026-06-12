@@ -64,45 +64,219 @@ Advanced AI (ensemble models, meta-learning), high-frequency workflows, and Kube
 ## Current Project Structure
 
 ```text
-backend/
-  app/
-    main.py                   # FastAPI application entry point
-    api/
-      routes/
-        auth.py               # Authentication endpoints (register / login)
-        health.py             # Health check endpoint
-        market.py             # Market data endpoints (prices, ingest, batch ingest)
-        data_quality.py       # Data quality endpoints (trust, safety, alerts, reports)
-        features.py           # Feature generation endpoints (single, batch, multi-stock)
-    core/
-      config.py               # Application configuration
-      logging.py              # Logging configuration
-    models/                   # SQLAlchemy ORM models
-      stock.py                # Stock / symbol metadata
-      price.py                # Price data
-      feature.py              # Computed features
-      data_quality.py         # Trust scores, alerts, reports, holiday calendar, events
-      data_source.py          # Data sources and ingestion logs
-      strategy.py             # Strategy registry
-      signal.py               # Trade signals
-      backtest.py             # Backtest results
-      portfolio_snapshot.py   # Portfolio snapshots
-      dataset.py              # Datasets
-      model_registry.py       # ML models
-      trade.py                # Trade logs
-      user.py                 # Users and RBAC
-    schemas/                  # Pydantic schemas
-    services/                 # Business logic layer
-      feature.py              # Feature computation (RSI, MACD, EMA, ATR, returns, etc.)
-      data_quality.py         # Trust scoring, system mode, source accuracy, drift detection
-      data_quality_gate.py    # Data quality gating for features and backtesting
-      backtest.py             # Backtest execution with data quality enforcement
-      benchmark.py            # Benchmark comparison, alpha/beta calculation
-      ingestion.py            # Data ingestion service
-      market.py               # Market data service
-      auth.py                 # Authentication service
-    db/                       # Database session + Alembic migrations
-  tests/                      # pytest test suite
+.
+├── .streamlit/
+│   └── secrets.toml                         # Streamlit secrets for dashboard auth
+├── .vscode/
+│   └── settings.json                        # VS Code workspace settings
+├── .gitignore
+├── TODO.md
+├── TODO_PHASE_6.md
+├── AGENTS.md
+├── README.md
+├── pyproject.toml
+├── uv.lock
+├── nepse_ai.db                              # Development SQLite database
+├── requirements.txt
+├── requirements-dev.txt
+├── alembic.ini
+├── Nepse AI Trading System.code-workspace
+│
+├── backend/
+│   ├── __init__.py
+│   └── app/
+│       ├── __init__.py
+│       ├── main.py                          # FastAPI application entry point
+│       ├── core/
+│       │   ├── __init__.py
+│       │   ├── config.py                    # Application configuration
+│       │   ├── logging.py                   # Logging configuration
+│       │   └── security.py                  # Security utilities
+│       ├── api/
+│       │   ├── __init__.py
+│       │   └── routes/
+│       │       ├── __init__.py
+│       │       ├── auth.py                  # Authentication endpoints
+│       │       ├── health.py                # Health check endpoint
+│       │       ├── market.py                # Market data endpoints
+│       │       ├── features.py              # Feature generation endpoints
+│       │       ├── data_quality.py          # Data quality endpoints
+│       │       ├── strategies.py            # Strategy endpoints
+│       │       ├── ml.py                    # ML model endpoints
+│       │       └── signals.py               # Signal tracking endpoints
+│       ├── models/                          # SQLAlchemy ORM models
+│       │   ├── __init__.py
+│       │   ├── stock.py                     # Stock / symbol metadata
+│       │   ├── price.py                     # Price data
+│       │   ├── feature.py                   # Computed features
+│       │   ├── data_quality.py              # Trust scores, alerts, reports, calendar, events
+│       │   ├── data_source.py               # Data sources and ingestion logs
+│       │   ├── strategy.py                  # Strategy registry
+│       │   ├── signal.py                    # Trade signals
+│       │   ├── backtest.py                  # Backtest results
+│       │   ├── portfolio_snapshot.py         # Portfolio snapshots
+│       │   ├── dataset.py                   # Datasets
+│       │   ├── model_registry.py            # ML models
+│       │   ├── trade.py                     # Trade logs
+│       │   ├── user.py                      # Users and RBAC
+│       │   ├── benchmark.py                 # Benchmark data
+│       │   ├── drift_event.py               # Drift detection events
+│       │   ├── telegram.py                  # Telegram alert config
+│       │   ├── types.py                     # SQLAlchemy custom types
+│       │   └── ...
+│       ├── schemas/                         # Pydantic schemas
+│       │   ├── __init__.py
+│       │   ├── auth.py
+│       │   ├── market.py
+│       │   ├── feature.py
+│       │   ├── ingestion.py
+│       │   ├── strategy.py
+│       │   └── data_quality.py
+│       ├── services/                        # Business logic layer
+│       │   ├── __init__.py
+│       │   ├── auth.py                      # Authentication service
+│       │   ├── market.py                    # Market data service
+│       │   ├── ingestion.py                 # Data ingestion service
+│       │   ├── feature.py                   # Feature computation service
+│       │   ├── data_quality.py              # Trust scoring, system mode, source accuracy, drift
+│       │   ├── data_quality_gate.py          # Data quality gating for features and backtesting
+│       │   ├── backtest.py                  # Backtest execution with data quality enforcement
+│       │   ├── benchmark.py                 # Benchmark comparison, alpha/beta calculation
+│       │   ├── strategy.py                  # Strategy evaluation service
+│       │   ├── mlflow_tracking.py           # MLflow training orchestration
+│       │   ├── telegram_alerter.py          # Telegram alert sending service
+│       │   └── signal_backfill.py           # Historical signal completion service
+│       └── db/
+│           ├── __init__.py
+│           ├── session.py                   # Database session factory
+│           ├── base.py                      # Declarative base
+│           ├── models/                      # SQLAlchemy models (db-local copies)
+│           │   ├── __init__.py
+│           │   ├── stock.py
+│           │   ├── price.py
+│           │   ├── feature.py
+│           │   ├── data_quality.py
+│           │   ├── data_source.py
+│           │   ├── strategy.py
+│           │   ├── signal.py
+│           │   ├── backtest.py
+│           │   ├── portfolio_snapshot.py
+│           │   ├── dataset.py
+│           │   ├── model_registry.py
+│           │   ├── trade.py
+│           │   ├── benchmark.py
+│           │   ├── drift_event.py
+│           │   ├── user.py
+│           │   └── types.py
+│           └── migrations/
+│               ├── __init__.py
+│               ├── env.py                   # Alembic environment config
+│               └── versions/
+│                   ├── 0001_initial_schema.py
+│                   ├── 0002_add_data_sources_and_ingestion_logs.py
+│                   ├── 0003_update_ingestion_logs_add_source_id_and_duration.py
+│                   ├── 0004_add_data_quality_tables.py
+│                   ├── 0005_add_trust_score_to_features.py
+│                   ├── 0006_add_trust_version_and_event_features.py
+│                   ├── 0007_add_benchmark_and_trade_fields.py
+│                   └── 0008_add_signal_tracking_and_telegram_alerts.py
+│
+├── ml/                                      # ML pipelines and utilities
+│   ├── __init__.py
+│   ├── training.py                          # Model training orchestration
+│   ├── inference.py                         # Model inference utilities
+│   ├── prediction.py                         # Prediction generation
+│   ├── evaluation.py                        # Model evaluation metrics
+│   ├── dataset.py                           # Dataset builders/loaders
+│   ├── feature_vector.py                    # Feature vector construction
+│   ├── labeling.py                          # Label generation for supervised learning
+│   ├── drift_monitoring.py                  # Data drift detection
+│   ├── risk_manager.py                      # Risk-aware model outputs
+│   ├── position_sizing.py                   # Position sizing logic
+│   └── experiment_tracking.py               # MLflow experiment helpers
+│
+├── strategies/                              # Strategy definitions and experiments
+│   └── __init__.py
+│
+├── data/                                    # Data layer (raw, ingestion, validation)
+│   ├── __init__.py
+│   ├── loaders/__init__.py                  # DataLoader utilities
+│   ├── ingestion/__init__.py                # Ingestion adapters/scrapers
+│   ├── validation/__init__.py              # Validation rules and checksum verification
+│   └── raw/
+│       └── .gitkeep                         # Placeholder for raw input files
+│
+├── scripts/
+│   └── seed_symbols.py                      # Seed NEPSE symbols into database
+│
+├── dashboard/                               # Streamlit dashboard
+│   ├── __init__.py
+│   ├── app.py                               # Main Streamlit application
+│   ├── dashboard_complete.py                # Complete dashboard module
+│   ├── feature_guide.md
+│   ├── README.md
+│   ├── requirements-dashboard.txt
+│   ├── .streamlit/
+│   │   ├── config.toml                      # Streamlit server configuration
+│   │   └── secrets.toml                     # Streamlit secrets
+│   └── venv/                                # Dashboard local virtual environment
+│
+├── docs/
+│   ├── ARCHITECTURE.md
+│   ├── PHASES.md
+│   ├── PHASE6_REPORT.md
+│   ├── SUCCESS_METRICS.md
+│   ├── data_quality_gate_spec.md
+│   └── RISK_DISCLAIMER.md
+│
+├── Documents/                               # Project documentation and planning
+│   ├── 0_INDEX.md
+│   ├── 00_QUICK_REFERENCE.md
+│   ├── 1_PRD.md
+│   ├── 2_TRD.md
+│   ├── 3_APP_FLOW.md
+│   ├── 4_UI_UX_BRIEF.md
+│   ├── 5_BACKEND_SCHEMA.md
+│   ├── 6_IMPLEMENTATION_PLAN.md
+│   ├── 7_Security.md
+│   ├── NEPSE_AI_Trading_Research_Platform_Integrated.md
+│   ├── PLAN.md
+│   └── phase.md
+│
+├── infra/                                   # Infrastructure / deployment
+│   ├── docker-compose.yml                   # Multi-service Docker Compose
+│   └── docker/
+│       ├── api.Dockerfile                   # Backend API Dockerfile
+│       └── dashboard.Dockerfile             # Dashboard Dockerfile
+│
+├── models/
+│   ├── logistic_v1.0.0.joblib              # Production-trained LSTM model artifact
+│   └── logistic_vtest.2.0.joblib           # Latest test model artifact
+│
+├── research/
+│   └── notebooks/
+│       ├── README.md
+│       ├── 01_idea_to_backtest.ipynb        # Notebook: concept to backtest
+│       ├── 02_backtest_and_export.ipynb     # Notebook: backtest execution and export
+│       └── 03_integrate_bundle.ipynb        # Notebook: integrate bundle
+│
+├── .ruff_cache/                             # Ruff cache (generated)
+│
+└── backend/tests/                           # pytest test suite
+    ├── conftest.py                          # Test fixtures and config
+    ├── test_health.py                       # Health endpoint tests
+    ├── test_auth.py                         # Authentication tests
+    ├── test_market.py                       # Market data tests
+    ├── test_ingestion.py                    # Ingestion tests
+    ├── test_feature.py                      # Feature computation tests
+    ├── test_data_quality.py                 # Data quality endpoint tests
+    ├── test_data_quality_gate.py            # Data quality gating tests
+    ├── test_strategy_backtest.py            # Strategy and backtest tests
+    ├── test_ml.py                           # ML pipeline tests
+    ├── test_mlflow_tracking.py              # MLflow tracking tests
+    ├── test_signal_backfill.py              # Signal backfill tests
+    ├── test_telegram_alerter.py             # Telegram alerter tests
+    └── __pycache__/                         # Python test cache (generated)
 ```
 
 ## API Endpoints (Current)

@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     )
 
     database_url: str = Field(
-        default="postgresql+psycopg://nepse:change_me@localhost:5432/nepse_ai",
+        default="sqlite:///./nepse_ai.db",
         validation_alias=AliasChoices("DATABASE_URL", "database_url"),
     )
     redis_url: str = Field(

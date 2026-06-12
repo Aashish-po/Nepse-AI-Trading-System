@@ -57,7 +57,6 @@ def upgrade() -> None:
         "signals",
         sa.Column("trailing_stop", sa.Numeric(precision=10, scale=6), nullable=True),
     )
-    op.alter_column("signals", "provider", server_default=None)
 
     op.create_table(
         "telegram_daily_alerts",
