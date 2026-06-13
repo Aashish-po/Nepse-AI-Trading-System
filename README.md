@@ -371,7 +371,9 @@ Use `research/notebooks/` for exploratory analysis. All experimental results mus
 
 ## Current Phase Status
 
-**Phase 0-5 Complete**: Foundation, database, data quality, features, and backtesting engine are implemented.
+**Phase 0-6 Implementation Complete**: Foundation, database, data quality, features, backtesting engine, dashboard, and export workflow are implemented.
+
+**Phase 6 Validation In Progress**: Automated validation gate criteria are being verified through `backend/tests/test_phase6_validation.py`.
 
 ### Completed Features
 
@@ -383,6 +385,9 @@ Use `research/notebooks/` for exploratory analysis. All experimental results mus
 - Technical indicators (RSI, SMA, EMA, MACD, ATR, returns)
 - Transaction cost and fill rate modeling
 - Portfolio-level constraints (max positions, cash reserves)
+- Dashboard with 8 pages (Market Overview, Strategies, Backtesting, Signals, Features, Data Sources, Alerts, System Status)
+- Export workflow (JSON/CSV backtest reports, equity curves, trade logs)
+- Safe mode integration (Phase 2b → Phase 6)
 
 ### Backtesting Realism
 
