@@ -13,6 +13,7 @@ from app.models.feature import Feature
 from app.models.model_registry import ModelRegistry
 from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.models.price import Price
+from app.models.quota import ProviderQuotaUsage
 from app.models.signal import Signal
 from app.models.stock import Stock
 from app.models.strategy import Strategy
@@ -36,6 +37,7 @@ __all__ = [
     "ModelRegistry",
     "PortfolioSnapshot",
     "Price",
+    "ProviderQuotaUsage",
     "Signal",
     "SourceCorrelation",
     "Stock",

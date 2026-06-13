@@ -7,9 +7,11 @@ import sqlalchemy as sa
 from app.db.session import get_db
 from app.models.signal import Signal
 from app.models.stock import Stock
+from app.schemas.signals import ProviderQuotaResponse, ProviderQuotaSummaryResponse
 from app.services.data_quality_gate import DataQualityGateError
+from app.services.provider_quota import ProviderQuotaService
 from app.services.signal_backfill import SignalBackfillService
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/signals", tags=["signals"])
@@ -50,6 +52,61 @@ def get_signal_heatmap(date_str: str, db: DbSession) -> dict:
             for row in rows
         ],
     }
+
+
+@router.get("/quota", response_model=ProviderQuotaSummaryResponse)
+def list_provider_quotas(
+    db: DbSession,
+    date: str | None = Query(default=None),
+) -> ProviderQuotaSummaryResponse:
+    service = ProviderQuotaService(session=db)
+    providers_raw = service.list_statuses(quota_date=date)
+    providers = [ProviderQuotaResponse(**item) for item in providers_raw]
+
+    summary_date = providers[0].date if providers else (date or dt.date.today().isoformat())
+
+    return ProviderQuotaSummaryResponse(
+        date=summary_date,
+        providers=providers,
+        total_request_count=sum(p.request_count for p in providers),
+        total_signal_count=sum(p.signal_count for p in providers),
+        total_success_count=sum(p.success_count for p in providers),
+        total_failure_count=sum(p.failure_count for p in providers),
+        total_skipped_count=sum(p.skipped_count for p in providers),
+        total_token_count=sum(p.token_count for p in providers),
+        total_cost=sum(p.cost for p in providers),
+    )
+
+
+@router.get("/quota/{provider}", response_model=ProviderQuotaResponse)
+def get_provider_quota(
+    provider: str,
+    db: DbSession,
+    date: str | None = Query(default=None),
+) -> ProviderQuotaResponse:
+    service = ProviderQuotaService(session=db)
+    return ProviderQuotaResponse(**service.get_status(provider, quota_date=date))
+
+
+@router.post("/backfill-all")
+def backfill_all_signals(
+    start_date: str,
+    end_date: str | None = None,
+    db: Session = Depends(get_db),
+    upsert: bool = True,
+    symbols: list[str] | None = Query(default=None),
+) -> dict:
+    """Backfill rule-based signals for active symbols or an explicit symbol list."""
+    try:
+        backfill = SignalBackfillService(session=db)
+        return backfill.backfill_all(
+            start_date=start_date,
+            end_date=end_date,
+            symbols=symbols,
+            upsert=upsert,
+        )
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.post("/backfill/{symbol}")

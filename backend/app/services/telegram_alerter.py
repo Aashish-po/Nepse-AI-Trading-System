@@ -13,6 +13,8 @@ from app.models.signal import Signal
 from app.models.stock import Stock
 from app.models.telegram import TelegramDailyAlert
 from app.services.data_quality_gate import DataQualityGate, DataQualityGateError
+from app.services.provider_quota import ProviderQuotaService
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
@@ -53,6 +55,7 @@ class TelegramAlerter:
         self._daily_cap = daily_cap
         self._session = session
         self._gate = gate or DataQualityGate(session=session)
+        self._quota = ProviderQuotaService(session=session)
 
     def _get_session(self) -> Session:
         if self._session is not None:
@@ -61,11 +64,11 @@ class TelegramAlerter:
 
     def _remaining_cap(self, session: Session, symbol: str, alert_date: dt.date) -> int:
         count = session.scalar(
-            sa.select(sa.func.count(TelegramDailyAlert.id))
+            sa.select(sa.func.coalesce(sa.func.sum(TelegramDailyAlert.alert_count), 0))
             .where(TelegramDailyAlert.symbol == symbol.upper())
             .where(TelegramDailyAlert.alert_date == alert_date)
         )
-        return max(0, self._daily_cap - (count or 0))
+        return max(0, self._daily_cap - int(count or 0))
 
     def resolve_signal(
         self,
@@ -89,25 +92,59 @@ class TelegramAlerter:
         owns_session = session is None
         sess = session or self._get_session()
         try:
-            today = dt.date.today()
-            stock = sess.scalar(sa.select(Stock).where(Stock.symbol == symbol.upper()))
+            symbol = symbol.upper()
+            try:
+                alert_date = dt.date.fromisoformat(date_str)
+            except ValueError:
+                return TelegramSendResult(
+                    False, DELIVERY_FAILED, "invalid_date", error="invalid_date"
+                )
+
+            stock = sess.scalar(sa.select(Stock).where(Stock.symbol == symbol))
             if stock is None:
                 return TelegramSendResult(
                     False, DELIVERY_FAILED, "stock_not_found", error="stock_not_found"
                 )
 
-            remaining = self._remaining_cap(sess, symbol, today)
+            remaining = self._remaining_cap(sess, symbol, alert_date)
             if remaining <= 0:
+                self._quota.record_usage(
+                    provider,
+                    quota_date=alert_date,
+                    request_count=1,
+                    skipped_count=1,
+                    token_count=token_count or 0,
+                    cost=inference_cost or 0.0,
+                    metadata={
+                        "symbol": symbol,
+                        "date": date_str,
+                        "reason": "daily_cap_reached",
+                    },
+                )
                 return TelegramSendResult(False, DELIVERY_SKIPPED, "daily_cap_reached")
 
             try:
                 self._gate.assert_safe_for_backtest(symbol, date_str)
             except DataQualityGateError as exc:
                 logger.info("Skipping Telegram alert for %s: %s", symbol, exc)
+                self._quota.record_usage(
+                    provider,
+                    quota_date=alert_date,
+                    request_count=1,
+                    skipped_count=1,
+                    token_count=token_count or 0,
+                    cost=inference_cost or 0.0,
+                    metadata={
+                        "symbol": symbol,
+                        "date": date_str,
+                        "reason": "data_quality_gate",
+                        "error": str(exc),
+                    },
+                )
                 self._persist_alert(
                     sess,
                     symbol,
-                    today,
+                    alert_date,
                     DELIVERY_SKIPPED,
                     alert_count=1,
                     last_error=str(exc),
@@ -118,12 +155,12 @@ class TelegramAlerter:
 
             send_success = True
             send_error: str | None = None
-
             status = DELIVERY_SENT if send_success else DELIVERY_FAILED
+
             alert = self._persist_alert(
                 sess,
                 symbol,
-                today,
+                alert_date,
                 status,
                 alert_count=1,
                 last_error=send_error,
@@ -131,7 +168,7 @@ class TelegramAlerter:
 
             signal = Signal(
                 stock_id=stock.id,
-                date=today,
+                date=alert_date,
                 signal_type=signal_type,
                 value=value,
                 confidence=confidence,
@@ -147,6 +184,23 @@ class TelegramAlerter:
                 trailing_stop=trailing_stop,
             )
             sess.add(signal)
+            sess.flush()
+            self._quota.record_usage(
+                provider,
+                quota_date=alert_date,
+                request_count=1,
+                signal_count=1,
+                success_count=1 if send_success else 0,
+                failure_count=0 if send_success else 1,
+                token_count=token_count or 0,
+                cost=inference_cost or 0.0,
+                metadata={
+                    "symbol": symbol,
+                    "date": date_str,
+                    "signal_id": signal.id,
+                    "alert_id": alert.id,
+                },
+            )
             sess.commit()
 
             if send_success:
@@ -170,40 +224,102 @@ class TelegramAlerter:
         last_error: str | None = None,
         last_sent_at: dt.datetime | None = None,
     ) -> TelegramDailyAlert:
-        record = TelegramDailyAlert(
-            symbol=symbol.upper(),
-            alert_date=alert_date,
-            telegram_sent=delivery_status == DELIVERY_SENT,
-            delivery_status=delivery_status,
-            alert_count=alert_count,
-            last_error=last_error,
-            last_sent_at=last_sent_at or dt.datetime.now(dt.UTC),
+        symbol = symbol.upper()
+        record = session.scalar(
+            sa.select(TelegramDailyAlert).where(
+                TelegramDailyAlert.symbol == symbol,
+                TelegramDailyAlert.alert_date == alert_date,
+            )
         )
-        session.add(record)
+        now = last_sent_at or dt.datetime.now(dt.UTC)
+        if record is None:
+            record = TelegramDailyAlert(
+                symbol=symbol,
+                alert_date=alert_date,
+                telegram_sent=delivery_status == DELIVERY_SENT,
+                delivery_status=delivery_status,
+                alert_count=alert_count,
+                last_error=last_error,
+                last_sent_at=now,
+            )
+            session.add(record)
+            try:
+                session.flush()
+            except IntegrityError:
+                session.rollback()
+                record = session.scalar(
+                    sa.select(TelegramDailyAlert).where(
+                        TelegramDailyAlert.symbol == symbol,
+                        TelegramDailyAlert.alert_date == alert_date,
+                    )
+                )
+                if record is None:
+                    raise
+                record.alert_count = (record.alert_count or 0) + alert_count
+                if delivery_status == DELIVERY_SENT:
+                    record.telegram_sent = True
+                    record.delivery_status = DELIVERY_SENT
+                    record.last_sent_at = now
+                elif delivery_status == DELIVERY_FAILED and record.delivery_status != DELIVERY_SENT:
+                    record.delivery_status = DELIVERY_FAILED
+                elif delivery_status == DELIVERY_SKIPPED and record.delivery_status not in (
+                    DELIVERY_SENT,
+                    DELIVERY_FAILED,
+                ):
+                    record.delivery_status = DELIVERY_SKIPPED
+                record.last_error = last_error or record.last_error
+                session.flush()
+                return record
+            return record
+
+        record.alert_count = (record.alert_count or 0) + alert_count
+        if delivery_status == DELIVERY_SENT:
+            record.telegram_sent = True
+            record.delivery_status = DELIVERY_SENT
+            record.last_sent_at = now
+        elif delivery_status == DELIVERY_FAILED and record.delivery_status != DELIVERY_SENT:
+            record.delivery_status = DELIVERY_FAILED
+        elif delivery_status == DELIVERY_SKIPPED and record.delivery_status not in (
+            DELIVERY_SENT,
+            DELIVERY_FAILED,
+        ):
+            record.delivery_status = DELIVERY_SKIPPED
+        record.last_error = last_error or record.last_error
         session.flush()
         return record
 
-    def provider_quota_status(self, provider: str) -> dict[str, Any]:
-        session = self._get_session()
-        owns_session = self._session is None
+    def provider_quota_status(
+        self, provider: str, session: Session | None = None
+    ) -> dict[str, Any]:
+        sess = session or self._session or self._get_session()
+        owns_session = session is None and self._session is None
         try:
             today = dt.date.today()
-            result = session.execute(
+            signal_result = sess.execute(
                 sa.select(
                     sa.func.count(Signal.id).label("signal_count"),
                     sa.func.coalesce(sa.func.sum(Signal.inference_cost), 0.0).label("cost"),
                     sa.func.coalesce(sa.func.sum(Signal.token_count), 0).label("tokens"),
                 )
-                .where(Signal.provider == provider)
+                .where(sa.func.lower(Signal.provider) == provider.lower())
                 .where(Signal.date == today)
             ).one()
+            quota = ProviderQuotaService(session=sess).get_status(provider, quota_date=today)
+            signal_cost = float(signal_result.cost or 0.0)
             return {
-                "provider": provider,
+                "provider": provider.upper(),
                 "date": today.isoformat(),
-                "signal_count": int(result.signal_count or 0),
-                "cost": float(result.cost or 0.0),
-                "token_count": int(result.tokens or 0),
+                "signal_count": int(signal_result.signal_count or 0),
+                "request_count": quota["request_count"],
+                "updated_count": quota["updated_count"],
+                "success_count": quota["success_count"],
+                "failure_count": quota["failure_count"],
+                "skipped_count": quota["skipped_count"],
+                "cost": max(quota["cost"], signal_cost),
+                "token_count": int(signal_result.tokens or 0),
+                "quota_token_count": quota["token_count"],
+                "metadata": quota["metadata"],
             }
         finally:
             if owns_session:
-                session.close()
+                sess.close()
