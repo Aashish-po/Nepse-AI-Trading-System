@@ -4,15 +4,18 @@ from __future__ import annotations
 
 import logging
 import sys
+
+# Ensure workspace root is on path for ml/ imports
 from pathlib import Path
 from typing import Annotated, Any
 
+import joblib
+import numpy as np
 from app.db.session import get_db
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-# Ensure workspace root is on path for ml/ imports
 _workspace_root = Path(__file__).parent.parent.parent.parent
 if str(_workspace_root) not in sys.path:
     sys.path.insert(0, str(_workspace_root))  # noqa: E402
@@ -20,6 +23,9 @@ if str(_workspace_root) not in sys.path:
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["ml"])
 DbSession = Annotated[Session, Depends(get_db)]
+
+# Late import for feature vector (after path setup)
+from ml.feature_vector import build_feature_vector  # noqa: E402
 
 
 # Define request/response models here (lightweight, no ml imports)
@@ -52,6 +58,16 @@ class TrainingResponse(BaseModel):
     symbol: str
     model_name: str
     message: str
+    model_id: str | None = None
+    metrics: dict[str, Any] | None = None
+    promotion_status: str | None = None
+
+
+class ListModelsResponse(BaseModel):
+    """Response for listing models."""
+
+    total: int
+    models: list[dict[str, Any]]
 
 
 class PredictionRequest(BaseModel):
@@ -78,7 +94,7 @@ class PredictionResponse(BaseModel):
 @router.post("/datasets/build", response_model=DatasetBuildResponse)
 async def build_dataset(
     request: DatasetBuildRequest,
-    session: DbSession,
+    session: Session = Depends(get_db),
 ) -> DatasetBuildResponse:
     """Build a dataset for a given stock symbol."""
     try:
@@ -102,7 +118,7 @@ async def build_dataset(
 @router.post("/models/train", response_model=TrainingResponse)
 async def train_model(
     request: ModelTrainRequest,
-    session: DbSession,
+    session: Session = Depends(get_db),
 ) -> TrainingResponse:
     """Train ML model for a symbol."""
     try:
@@ -168,3 +184,166 @@ async def ml_status() -> dict[str, str]:
         return {"status": "available", "message": "ML modules ready"}
     except ImportError as e:
         return {"status": "unavailable", "message": f"ML modules not loaded: {e}"}
+
+
+class TrainModelRequest(BaseModel):
+    """Request to train a model with Phase 7 parameters."""
+
+    model_name: str = "logistic"
+    symbols: list[str] = ["NABIL"]
+    start_date: str | None = None
+    end_date: str | None = None
+    validation_method: str = "single_split"
+    random_state: int = 42
+
+
+@router.post("/ml/models/train", response_model=TrainingResponse)
+async def train_model_phase7(
+    request: TrainModelRequest,
+    session: DbSession,
+) -> TrainingResponse:
+    """Train a baseline ML model with Phase 7 enhancements."""
+    try:
+        from datetime import date as date_type
+
+        from ml.dataset import DatasetBuilder
+        from ml.training import ModelTrainer
+
+        builder = DatasetBuilder(session=session, feature_version="v4.0.0")
+
+        if request.validation_method == "walk_forward":
+            start_dt = (
+                date_type.fromisoformat(request.start_date)
+                if request.start_date
+                else date_type(2022, 1, 1)
+            )
+            end_dt = (
+                date_type.fromisoformat(request.end_date) if request.end_date else date_type.today()
+            )
+            trainer = ModelTrainer(session=session)
+            result = trainer.train_walk_forward(
+                builder=builder,
+                symbols=request.symbols,
+                start_date=start_dt,
+                end_date=end_dt,
+                model_name=request.model_name,
+                random_state=request.random_state,
+            )
+            return TrainingResponse(
+                success=True,
+                symbol=request.symbols[0] if request.symbols else "MULTI",
+                model_name=request.model_name,
+                message=f"Walk-forward training completed: {result.get('n_folds', 0)} folds",
+                model_id=result.get("model_id"),
+                metrics=result.get("metrics"),
+                promotion_status=result.get("promotion_status"),
+            )
+        else:
+            bundle = builder.build(request.symbols[0])
+            trainer = ModelTrainer(session=session)
+            result = trainer.train_baseline(
+                bundle, model_name=request.model_name, random_state=request.random_state
+            )
+            return TrainingResponse(
+                success=True,
+                symbol=request.symbols[0],
+                model_name=request.model_name,
+                message="Model trained successfully",
+                model_id=result.get("model_id"),
+                metrics=result.get("metrics"),
+                promotion_status=result.get("promotion_status"),
+            )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except Exception as e:
+        logger.exception("Model training failed")
+        raise HTTPException(status_code=500, detail="Training failed") from e
+
+
+@router.get("/ml/models", response_model=ListModelsResponse)
+async def list_models(session: DbSession, status: str | None = None) -> ListModelsResponse:
+    """List trained models, optionally filtered by status."""
+    try:
+        from app.models.model_registry import ModelRegistry
+
+        query = session.query(ModelRegistry)
+        if status:
+            query = query.filter(ModelRegistry.params.contains({"status": status}))
+
+        models = query.order_by(ModelRegistry.created_at.desc()).all()
+
+        model_list = [
+            {
+                "id": m.version.split("_")[-1] if "_" in m.version else m.id,
+                "name": m.name,
+                "version": m.version,
+                "status": m.params.get("status", "unknown") if m.params else "unknown",
+                "metrics": m.metrics,
+                "created_at": m.created_at.isoformat(),
+            }
+            for m in models
+        ]
+
+        return ListModelsResponse(total=len(model_list), models=model_list)
+    except Exception as e:
+        logger.exception("Failed to list models")
+        raise HTTPException(status_code=500, detail=str(e)) from None
+
+
+@router.post("/ml/models/{model_id}/predict", response_model=PredictionResponse)
+async def predict_by_id(
+    model_id: str,
+    request: PredictionRequest,
+    session: DbSession,
+) -> PredictionResponse:
+    """Get prediction from a trained model by ID."""
+    try:
+        import sqlalchemy
+        from app.models.model_registry import ModelRegistry
+
+        model_prefix = model_id[:8] if len(model_id) >= 8 else model_id
+        entry = (
+            session.query(ModelRegistry)
+            .filter(
+                sqlalchemy.or_(
+                    ModelRegistry.name == model_prefix,
+                    ModelRegistry.params["model_id"].astext.contains(model_id),
+                )
+            )
+            .first()
+        )
+        if not entry:
+            entry = (
+                session.query(ModelRegistry)
+                .filter(
+                    sqlalchemy.or_(
+                        ModelRegistry.id == model_id,
+                        ModelRegistry.version.contains(model_id),
+                        ModelRegistry.params["model_id"].astext.contains(model_id),
+                    )
+                )
+                .first()
+            )
+
+        if not entry:
+            raise HTTPException(status_code=404, detail="Model not found")
+
+        model = joblib.load(entry.model_artifact_path)
+        vector = build_feature_vector(request.feature_values)
+        X = vector.reshape(1, -1)
+        prediction = int(model.predict(X)[0])
+        _confidence = (
+            float(np.max(model.predict_proba(X)[0])) if hasattr(model, "predict_proba") else 0.5
+        )
+
+        return PredictionResponse(
+            success=True,
+            symbol=request.symbol,
+            prediction=prediction,
+            error=None,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("Prediction failed")
+        return PredictionResponse(success=False, symbol=request.symbol, error=str(e))

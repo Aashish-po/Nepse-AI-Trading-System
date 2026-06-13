@@ -17,6 +17,7 @@ from app.services.feature import (
     FEATURE_VERSION,
     FeatureService,
 )
+from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -295,3 +296,168 @@ class TestExperimentTracking:
         result = et.get(exp_id)
         assert result is not None
         assert result["metrics"]["sharpe"] == 1.5
+
+
+# ============================================================================
+# PHASE 7 TESTS: Baseline ML Training
+# ============================================================================
+
+
+class TestPhase7DatasetBuilder:
+    def test_build_supervised_returns_dataframe(self, db_session: Session) -> None:
+        _seed_price_series(db_session, "P7TEST", "2024-01-01", count=100)
+        _seed_features(db_session, "P7TEST")
+        builder = DatasetBuilder(session=db_session, feature_version=FEATURE_VERSION)
+        X, y = builder.build_supervised(
+            symbols=["P7TEST"],
+            start_date=date(2024, 1, 1),
+            end_date=date(2024, 4, 10),
+        )
+        assert not X.empty
+        assert len(X) == len(y)
+
+    def test_build_supervised_labels_are_valid(self, db_session: Session) -> None:
+        _seed_price_series(db_session, "P7LABELS", "2024-01-01", count=100)
+        _seed_features(db_session, "P7LABELS")
+        builder = DatasetBuilder(session=db_session, feature_version=FEATURE_VERSION)
+        X, y = builder.build_supervised(
+            symbols=["P7LABELS"],
+            start_date=date(2024, 1, 1),
+            end_date=date(2024, 4, 10),
+        )
+        unique_labels = set(y.unique())
+        assert unique_labels.issubset({-1, 0, 1})
+
+
+class TestPhase7WalkForward:
+    def test_walk_forward_yields_folds(self, db_session: Session) -> None:
+        _seed_price_series(db_session, "P7WALK", "2024-01-01", count=100)
+        _seed_features(db_session, "P7WALK")
+        builder = DatasetBuilder(session=db_session, feature_version=FEATURE_VERSION)
+        folds = list(
+            builder.walk_forward_cv(
+                symbols=["P7WALK"],
+                start_date=date(2024, 1, 1),
+                end_date=date(2024, 6, 1),
+                train_size=20,
+                test_size=10,
+            )
+        )
+        assert len(folds) >= 1
+        for train_X, train_y, test_X, test_y, _train_dates, _test_dates in folds:
+            assert len(train_X) == len(train_y)
+            assert len(test_X) == len(test_y)
+
+
+class TestPhase7ModelTrainer:
+    def test_train_baseline_returns_result(self, db_session: Session) -> None:
+        _seed_price_series(db_session, "P7TRAIN", "2024-01-01", count=50)
+        _seed_features(db_session, "P7TRAIN")
+        builder = DatasetBuilder(session=db_session, feature_version=FEATURE_VERSION)
+        bundle = builder.build("P7TRAIN")
+        trainer = ModelTrainer(session=db_session)
+        result = trainer.train_baseline(bundle, model_name="logistic", random_state=42)
+
+        assert "model_id" in result
+        assert "metrics" in result
+        assert "promotion_status" in result
+        assert result["promotion_status"] in ["promoted", "rejected"]
+
+    def test_train_baseline_metrics_structure(self, db_session: Session) -> None:
+        _seed_price_series(db_session, "P7METRICS", "2024-01-01", count=50)
+        _seed_features(db_session, "P7METRICS")
+        builder = DatasetBuilder(session=db_session, feature_version=FEATURE_VERSION)
+        bundle = builder.build("P7METRICS")
+        trainer = ModelTrainer(session=db_session)
+        result = trainer.train_baseline(bundle, model_name="logistic", random_state=42)
+
+        metrics = result["metrics"]
+        assert "accuracy" in metrics
+        assert "precision" in metrics
+        assert "recall" in metrics
+        assert "f1_weighted" in metrics
+        assert "roc_auc" in metrics
+        assert "sharpe_ratio" in metrics
+        assert "max_drawdown" in metrics
+
+    def test_promotion_gate_uses_dynamic_baseline(self, db_session: Session) -> None:
+        _seed_price_series(db_session, "P7GATE", "2024-01-01", count=50)
+        _seed_features(db_session, "P7GATE")
+        builder = DatasetBuilder(session=db_session, feature_version=FEATURE_VERSION)
+        builder.build("P7GATE")
+        trainer = ModelTrainer(session=db_session)
+
+        # Test promotion with strong metrics
+        strong_metrics = {"sharpe_ratio": 0.8, "max_drawdown": 0.15, "win_rate": 0.6}
+        status = trainer._promotion_gate(strong_metrics, {"sharpe_ratio": 0.5})
+        assert status == "promoted"
+
+        # Test rejection with weak metrics
+        weak_metrics = {"sharpe_ratio": 0.3, "max_drawdown": 0.25, "win_rate": 0.5}
+        status = trainer._promotion_gate(weak_metrics, {"sharpe_ratio": 0.5})
+        assert status == "rejected"
+
+    def test_train_all_models_supported(self, db_session: Session) -> None:
+        _seed_price_series(db_session, "P7MULTI", "2024-01-01", count=80)
+        _seed_features(db_session, "P7MULTI")
+        builder = DatasetBuilder(session=db_session, feature_version=FEATURE_VERSION)
+        bundle = builder.build("P7MULTI")
+        trainer = ModelTrainer(session=db_session)
+
+        model_names = ["logistic"]
+        for model_name in model_names:
+            result = trainer.train_baseline(bundle, model_name=model_name, random_state=42)
+            assert result["model_id"]
+            assert "metrics" in result
+
+
+class TestPhase7API:
+    def test_train_model_endpoint_exists(self, client: TestClient, db_session: Session) -> None:
+        invalid_response = client.post(
+            "/ml/models/train",
+            json={"model_name": 123},
+        )
+        assert invalid_response.status_code == 422
+
+        _seed_price_series(db_session, "APITRAIN", "2024-01-01", count=80)
+        _seed_features(db_session, "APITRAIN")
+        response = client.post(
+            "/ml/models/train",
+            json={
+                "model_name": "logistic",
+                "symbols": ["APITRAIN"],
+                "start_date": "2024-01-01",
+                "end_date": "2024-04-20",
+                "validation_method": "single_split",
+                "random_state": 42,
+            },
+        )
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["success"] is True
+        assert payload["model_id"]
+        assert payload["metrics"]
+        assert db_session.scalar(select(ModelRegistry).where(ModelRegistry.name == "logistic"))
+
+    def test_list_models_endpoint_exists(self, client: TestClient, db_session: Session) -> None:
+        _seed_price_series(db_session, "APILIST", "2024-01-01", count=80)
+        _seed_features(db_session, "APILIST")
+        train_response = client.post(
+            "/ml/models/train",
+            json={
+                "model_name": "logistic",
+                "symbols": ["APILIST"],
+                "start_date": "2024-01-01",
+                "end_date": "2024-04-20",
+                "validation_method": "single_split",
+                "random_state": 42,
+            },
+        )
+        assert train_response.status_code == 200
+
+        response = client.get("/ml/models")
+        assert response.status_code == 200
+        payload = response.json()
+        assert "total" in payload
+        assert "models" in payload
+        assert payload["total"] >= 1

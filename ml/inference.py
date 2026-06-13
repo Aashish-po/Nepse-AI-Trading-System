@@ -45,6 +45,40 @@ class Predictor:
             "feature_names": FEATURE_ORDER,
         }
 
+    @classmethod
+    def load_model_by_id(cls, model_id: str, model_dir: Path | None = None) -> Predictor:
+        """Load a model by its registry ID."""
+        import sqlalchemy
+        from app.db.session import get_db
+        from app.models.model_registry import ModelRegistry
+
+        session = None
+        try:
+            session = next(get_db())
+            left = ModelRegistry.name == model_id[:8]
+            # Use SQL OR instead of Python boolean
+            entry = (
+                session.query(ModelRegistry)
+                .filter(sqlalchemy.or_(left, ModelRegistry.name.like(f"%{model_id}%")))
+                .first()
+            )
+            if entry is None:
+                entry = (
+                    session.query(ModelRegistry)
+                    .filter(ModelRegistry.params.contains({"model_id": model_id}))
+                    .first()
+                )
+        finally:
+            if session is not None:
+                session.close()
+
+        if entry is None:
+            raise ValueError(f"Model {model_id} not found in registry")
+
+        model_path = Path(entry.model_artifact_path)
+        _ = joblib.load(model_path)
+        return cls(model_name=entry.name, model_version=entry.version, model_dir=model_path.parent)
+
     def _load(self) -> Any:
         version_tag = (
             f"v{self._model_version}"

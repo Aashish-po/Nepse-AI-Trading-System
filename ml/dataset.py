@@ -42,6 +42,10 @@ from ml.labeling import LabelConfig, create_labels
 logger = logging.getLogger(__name__)
 ARTIFACTS_DIR = Path(__file__).resolve().parent.parent / "artifacts"
 
+from datetime import date
+
+import pandas as pd
+
 
 @dataclass
 class DatasetBundle:
@@ -56,6 +60,12 @@ class DatasetBundle:
     test_dates: list[str]
     feature_version: str
     symbol: str
+    prices_train: NDArray[np.float64] | None = None
+    prices_val: NDArray[np.float64] | None = None
+    prices_test: NDArray[np.float64] | None = None
+    returns_train: NDArray[np.float64] | None = None
+    returns_val: NDArray[np.float64] | None = None
+    returns_test: NDArray[np.float64] | None = None
 
 
 @dataclass
@@ -108,7 +118,7 @@ class DatasetBuilder:
 
         X = np.vstack(X_list)
         prices = np.array(prices_list, dtype=np.float64)
-        y, _, valid_mask = create_labels(prices, self._label_config)
+        y, returns, valid_mask = create_labels(prices, self._label_config)
         X = X[valid_mask]
         dates = [d for i, d in enumerate(dates) if valid_mask[i]]
 
@@ -137,6 +147,12 @@ class DatasetBuilder:
                 test_dates=dates[val_end:test_end],
                 feature_version=self._feature_version,
                 symbol=symbol,
+                prices_train=prices[start:train_end],
+                prices_val=prices[train_end:val_end],
+                prices_test=prices[val_end:test_end],
+                returns_train=returns[start:train_end],
+                returns_val=returns[train_end:val_end],
+                returns_test=returns[val_end:test_end],
             )
             total_windows = int((n - window_days) / step_days) + 1
             yield WalkForwardWindow(
@@ -167,7 +183,7 @@ class DatasetBuilder:
 
         X = np.vstack(X_list)
         prices = np.array(prices_list, dtype=np.float64)
-        y, _, valid_mask = create_labels(prices, self._label_config)
+        y, returns, valid_mask = create_labels(prices, self._label_config)
         X = X[valid_mask]
         dates = [d for i, d in enumerate(dates) if valid_mask[i]]
 
@@ -190,6 +206,12 @@ class DatasetBuilder:
             test_dates=dates[val_end:],
             feature_version=self._feature_version,
             symbol=symbol,
+            prices_train=prices[:train_end],
+            prices_val=prices[train_end:val_end],
+            prices_test=prices[val_end:],
+            returns_train=returns[:train_end],
+            returns_val=returns[train_end:val_end],
+            returns_test=returns[val_end:],
         )
 
     def build_and_export_parquet(
@@ -218,22 +240,29 @@ class DatasetBuilder:
         logger.info("Exported dataset to %s", path)
         return path
 
-    def _query_feature_price_rows(self, symbol: str) -> list[Any]:
+    def _query_feature_price_rows(
+        self, symbol: str, start_date: date | None = None, end_date: date | None = None
+    ) -> list[Any]:
         stock = self._session.scalar(select(Stock).where(Stock.symbol == symbol.upper()))
         if stock is None:
             raise ValueError(f"Stock {symbol} not found")
 
         f = Feature
         p = Price
+        where_conditions = [
+            f.stock_id == stock.id,
+            f.feature_version == self._feature_version,
+            f.confidence.is_not(None),
+        ]
+        if start_date is not None:
+            where_conditions.append(f.date >= start_date)
+        if end_date is not None:
+            where_conditions.append(f.date <= end_date)
 
         stmt = (
             select(f, p)
             .join(p, (f.stock_id == p.stock_id) & (f.date == p.date))
-            .where(
-                f.stock_id == stock.id,
-                f.feature_version == self._feature_version,
-                f.confidence.is_not(None),
-            )
+            .where(*where_conditions)
             .order_by(f.date.asc())
         )
         return list(self._session.execute(stmt).all())
@@ -275,3 +304,190 @@ class DatasetBuilder:
 
     def get_available_feature_versions(self) -> list[str]:
         return list(self._session.scalars(select(Feature.feature_version).distinct()).all())
+
+    def build_supervised(
+        self,
+        symbols: list[str],
+        start_date: date,
+        end_date: date,
+        lookback: int = 20,
+        lookahead: int = 1,
+        target_threshold: float = 0.02,
+        random_state: int | None = None,
+    ) -> tuple[pd.DataFrame, pd.Series]:
+        """
+        Build X, y for supervised learning with time-series safe construction.
+
+        Time-series safe: NO random shuffling, NO lookahead bias. Features at time t
+        only use data from t-lookback to t-1, labels use returns from t to t+lookahead,
+        and rows are restricted to the inclusive [start_date, end_date] range.
+
+        Args:
+            symbols: List of stock symbols to include
+            start_date: Start date for data range
+            end_date: End date for data range
+            lookback: Number of days of features to include per sample
+            lookahead: Days ahead to compute target return
+            target_threshold: Threshold for classification labels (1/-1/0)
+            random_state: Ignored (time-series safe, no shuffling)
+
+        Returns:
+            X: DataFrame with features from lookback window
+            y: Series with labels (1/-1/0 based on lookahead return vs threshold)
+        """
+        all_X = []
+        all_y = []
+
+        for symbol in symbols:
+            rows = self._query_feature_price_rows(symbol, start_date, end_date)
+            if not rows:
+                continue
+
+            prices_list = []
+            features_list = []
+            dates_list = []
+            for feature_row, price_row in rows:
+                values = feature_row.values or {}
+                close_p = price_row.close if price_row is not None else None
+                if not values or close_p is None:
+                    continue
+                prices_list.append(float(close_p))
+                features_list.append(values)
+                dates_list.append(feature_row.date)
+
+            if len(prices_list) < lookback + lookahead:
+                continue
+
+            prices = np.array(prices_list)
+            for i in range(lookback, len(prices) - lookahead):
+                X_window = []
+                for j in range(i - lookback, i):
+                    fv = self._feature_values_to_vector(features_list[j])
+                    X_window.extend(fv)
+                all_X.append(X_window)
+
+                future_return = (
+                    (prices[i + lookahead] - prices[i]) / prices[i] if prices[i] != 0 else 0.0
+                )
+                if future_return > target_threshold:
+                    label = 1
+                elif future_return < -target_threshold:
+                    label = -1
+                else:
+                    label = 0
+                all_y.append(label)
+
+        if not all_X:
+            return pd.DataFrame(), pd.Series(dtype=np.float64)
+
+        return pd.DataFrame(np.array(all_X)), pd.Series(np.array(all_y))
+
+    def _feature_values_to_vector(self, values: dict) -> list[float]:
+        return list(build_feature_vector(values))
+
+    def walk_forward_cv(
+        self,
+        symbols: list[str],
+        start_date: date,
+        end_date: date,
+        train_size: int = 252,
+        test_size: int = 63,
+        step: int = 63,
+        lookahead: int = 1,
+        target_threshold: float = 0.02,
+    ) -> Iterator[tuple[pd.DataFrame, pd.Series, pd.DataFrame, pd.Series, list[str], list[str]]]:
+        """
+        Time-series cross-validation: walk forward window.
+
+        Yields:
+            (train_X, train_y, test_X, test_y, train_dates, test_dates)
+        """
+        all_X, all_y, all_dates, _all_returns, _all_prices = self._build_full_dataset(
+            symbols, start_date, end_date, lookahead, target_threshold
+        )
+
+        n = len(all_X)
+        if n < train_size + test_size:
+            return
+
+        for start in range(0, n - train_size - test_size + 1, step):
+            train_end = start + train_size
+            test_end = train_end + test_size
+
+            train_X = all_X.iloc[start:train_end].reset_index(drop=True)
+            train_y = all_y.iloc[start:train_end].reset_index(drop=True)
+            test_X = all_X.iloc[train_end:test_end].reset_index(drop=True)
+            test_y = all_y.iloc[train_end:test_end].reset_index(drop=True)
+            train_dates = all_dates[start:train_end]
+            test_dates = all_dates[train_end:test_end]
+
+            yield train_X, train_y, test_X, test_y, train_dates, test_dates
+
+    def _build_full_dataset(
+        self,
+        symbols: list[str],
+        start_date: date,
+        end_date: date,
+        lookahead: int = 1,
+        target_threshold: float = 0.02,
+    ) -> tuple[pd.DataFrame, pd.Series, list[str], list[float], list[float]]:
+        all_X = []
+        all_y = []
+        all_dates = []
+        all_returns = []
+        all_prices = []
+
+        for symbol in symbols:
+            rows = self._query_feature_price_rows(symbol, start_date, end_date)
+            if not rows:
+                continue
+
+            prices_list = []
+            features_list = []
+            dates_list = []
+            for feature_row, price_row in rows:
+                values = feature_row.values or {}
+                close_p = price_row.close if price_row is not None else None
+                if not values or close_p is None:
+                    continue
+                prices_list.append(float(close_p))
+                features_list.append(values)
+                dates_list.append(feature_row.date.isoformat())
+
+            lookback = 20
+            if len(prices_list) < lookback + lookahead:
+                continue
+
+            for i in range(lookback, len(prices_list) - lookahead):
+                X_window = []
+                for j in range(i - lookback, i):
+                    fv = self._feature_values_to_vector(features_list[j])
+                    X_window.extend(fv)
+                all_X.append(X_window)
+
+                future_return = (
+                    (prices_list[i + lookahead] - prices_list[i]) / prices_list[i]
+                    if prices_list[i] != 0
+                    else 0.0
+                )
+                if future_return > target_threshold:
+                    label = 1
+                elif future_return < -target_threshold:
+                    label = -1
+                else:
+                    label = 0
+                all_y.append(label)
+                all_returns.append(future_return)
+                all_prices.append(prices_list[i])
+                all_dates.append(dates_list[i])
+
+        if not all_X:
+            return pd.DataFrame(), pd.Series(dtype=np.float64), [], [], []
+
+        return (
+            pd.DataFrame(np.array(all_X)),
+            pd.Series(np.array(all_y)),
+            all_dates,
+            all_returns,
+            all_prices,
+        )

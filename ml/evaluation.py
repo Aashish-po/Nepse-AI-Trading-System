@@ -7,8 +7,24 @@ from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
-from sklearn.metrics import accuracy_score, f1_score
+from sklearn.metrics import (
+    accuracy_score,
+    brier_score_loss,
+    f1_score,
+    log_loss,
+    roc_auc_score,
+)
 from sqlalchemy.orm import Session
+
+try:
+    # Optional; used for Brier score for multi-class only
+    from sklearn.preprocessing import label_binarize
+
+    _HAS_LABEL_BINARIZE = True
+except Exception:  # pragma: no cover
+    label_binarize = None
+    _HAS_LABEL_BINARIZE = False
+
 
 logger = logging.getLogger(__name__)
 
@@ -24,10 +40,75 @@ class ModelEvaluator:
         y_true: NDArray[np.float64],
     ) -> dict[str, float]:
         y_pred = model.predict(X)
-        return {
+
+        metrics: dict[str, float] = {
             "accuracy": float(accuracy_score(y_true, y_pred)),
             "f1_weighted": float(f1_score(y_true, y_pred, average="weighted", zero_division=0)),
         }
+
+        # Probability metrics (when supported by the model)
+        if hasattr(model, "predict_proba"):
+            y_proba = model.predict_proba(X)
+            try:
+                # log_loss handles binary + multi-class given correct shapes/labels
+                metrics["log_loss"] = float(log_loss(y_true, y_proba))
+            except Exception:
+                # Keep baseline stable; metrics are best-effort
+                pass
+
+            try:
+                metrics["roc_auc"] = float(self._roc_auc_score(y_true=y_true, y_proba=y_proba))
+            except Exception:
+                pass
+
+            # Brier score (binary) or multi-class brier (one-vs-rest averaged)
+            try:
+                metrics["brier_score"] = float(self._brier_score(y_true, y_proba))
+            except Exception:
+                pass
+
+        return metrics
+
+    def _roc_auc_score(
+        self,
+        *,
+        y_true: NDArray[np.float64],
+        y_proba: NDArray[np.float64],
+    ) -> float:
+        unique = np.unique(y_true)
+        if y_proba.ndim != 2:
+            raise ValueError("predict_proba must return a 2D array")
+
+        # Binary: assume positive class is column with max proba / or label ordering.
+        if len(unique) == 2 and y_proba.shape[1] == 2:
+            # Prefer column 1 (sklearn convention), but be robust to label ordering.
+            # sklearn convention: for binary classification, predict_proba returns
+
+            # two columns corresponding to the estimator.classes_ ordering.
+            # We assume the positive class corresponds to column 1.
+            return float(roc_auc_score(y_true, y_proba[:, 1]))
+
+        # Multi-class
+        return float(roc_auc_score(y_true, y_proba, multi_class="ovr", average="weighted"))
+
+    def _brier_score(
+        self,
+        y_true: NDArray[np.float64],
+        y_proba: NDArray[np.float64],
+    ) -> float:
+        unique = np.unique(y_true)
+        if len(unique) == 2 and y_proba.shape[1] == 2:
+            return float(brier_score_loss(y_true, y_proba[:, 1]))
+
+        # Multi-class: Brier score for one-vs-rest, averaged.
+        if not _HAS_LABEL_BINARIZE or label_binarize is None:
+            raise RuntimeError("label_binarize unavailable for multi-class brier")
+        y_bin = label_binarize(y_true, classes=unique)
+        if y_bin.shape[1] != y_proba.shape[1]:
+            # Attempt to align by sorting classes
+            y_bin = label_binarize(y_true, classes=np.arange(y_proba.shape[1]))
+        diff = np.asarray(y_bin, dtype=float) - np.asarray(y_proba, dtype=float)
+        return float(np.mean(np.sum(diff**2, axis=1)) / float(y_proba.shape[1]))
 
     def evaluate_trading(
         self,

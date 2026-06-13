@@ -19,6 +19,10 @@ from sqlalchemy.pool import StaticPool
 import app.models  # noqa: F401  # required for SQLAlchemy model registration
 from app.db.base import Base
 from app.db.session import get_db
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
 from app.main import create_app
 
 

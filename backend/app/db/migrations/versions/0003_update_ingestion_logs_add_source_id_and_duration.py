@@ -14,22 +14,14 @@ branch_labels = None
 depends_on = None
 
 
-def upgrade() -> None:
-    op.add_column("ingestion_logs", sa.Column("source_id", sa.Integer(), nullable=True))
-    op.add_column(
-        "ingestion_logs",
-        sa.Column("duration_seconds", sa.Float(), nullable=True),
-    )
-    op.create_foreign_key(
-        "fk_ingestion_logs_source_id",
-        "ingestion_logs",
-        "data_sources",
-        ["source_id"],
-        ["id"],
-    )
+def upgrade():
+    with op.batch_alter_table('ingestion_logs', schema=None) as batch_op:
+        batch_op.add_column(sa.Column('source_id', sa.UUID(), nullable=True))
+        batch_op.add_column(sa.Column('duration', sa.Float(), nullable=True))
+        batch_op.create_foreign_key('fk_ingestion_logs_source_id', 'data_sources', ['source_id'], ['id'])
 
 
 def downgrade() -> None:
     op.drop_constraint("fk_ingestion_logs_source_id", "ingestion_logs", type_="foreignkey")
-    op.drop_column("ingestion_logs", "duration_seconds")
+    op.drop_column("ingestion_logs", "duration")
     op.drop_column("ingestion_logs", "source_id")
