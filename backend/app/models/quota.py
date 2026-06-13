@@ -2,7 +2,7 @@ import datetime
 
 from app.db.base import Base
 from app.models.types import big_int_pk_type
-from sqlalchemy import Date, DateTime, Float, Integer, String
+from sqlalchemy import Date, DateTime, Float, Index, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.types import JSON
@@ -10,6 +10,11 @@ from sqlalchemy.types import JSON
 
 class ProviderQuotaUsage(Base):
     __tablename__ = "provider_quota_usage"
+    __table_args__ = (
+        UniqueConstraint("provider", "quota_date", name="uq_provider_quota_date"),
+        Index("ix_provider_quota_usage_quota_date", "quota_date"),
+        Index("ix_provider_quota_usage_provider_quota_date", "provider", "quota_date"),
+    )
 
     id: Mapped[int] = mapped_column(big_int_pk_type, primary_key=True)
     provider: Mapped[str] = mapped_column(String(32), nullable=False)

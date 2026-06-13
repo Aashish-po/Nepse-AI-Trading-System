@@ -76,6 +76,8 @@ class ProviderQuotaService:
                 record.metadata_json["last_updated_at"] = record.updated_at.isoformat()
 
             session.flush()
+            if owns_session:
+                session.commit()
             return record
         finally:
             if owns_session:
@@ -145,6 +147,7 @@ class ProviderQuotaService:
             }
         finally:
             if owns_session:
+                sess.commit()
                 sess.close()
 
     def list_statuses(
@@ -229,4 +232,5 @@ class ProviderQuotaService:
             ]
         finally:
             if owns_session:
+                sess.commit()
                 sess.close()
