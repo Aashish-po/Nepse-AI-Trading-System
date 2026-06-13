@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_DAILY_CAP = 10
+DEFAULT_DAILY_CAP = 5
 # Delivery statuses for Telegram alerts
 DELIVERY_PENDING = "pending"
 DELIVERY_SENT = "sent"

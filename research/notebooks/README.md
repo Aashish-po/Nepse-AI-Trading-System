@@ -1,6 +1,46 @@
 # Research Notebooks
 
-Use this folder for exploratory workflows:
+Use this folder for exploratory workflows.
+
+## Quick start
+
+1. Start the backend:
+
+   ```bash
+   uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --app-dir .
+   ```
+
+2. Set `API_BASE` to the running backend before opening a notebook:
+
+   ```bash
+   export API_BASE=http://127.0.0.1:8000
+   ```
+
+   Windows CMD variant:
+
+   ```cmd
+   set API_BASE=http://127.0.0.1:8000
+   ```
+
+   PowerShell variant:
+
+   ```powershell
+   $env:API_BASE="http://127.0.0.1:8000"
+   ```
+
+   On PowerShell:
+
+   ```powershell
+   $env:API_BASE="http://127.0.0.1:8000"
+   ```
+
+3. Open `01_idea_to_backtest.ipynb`, edit the hypothesis and parameters, then run all cells.
+
+4. Run `02_backtest_and_export.ipynb` to execute the backtest and export JSON, CSV, and chart artifacts.
+
+5. Run `03_integrate_bundle.ipynb` to package the exported artifacts for the strategy registry.
+
+## Workflow overview
 
 1. **Idea** → Define hypothesis and parameters
 2. **Notebook** → Create backtest request payload
@@ -51,12 +91,28 @@ Features:
 
 ## API Endpoints Reference
 
+All notebook and dashboard API calls use `API_BASE` as the backend root URL. The default is:
+
+```text
+http://127.0.0.1:8000
+```
+
+If the backend runs on a different host or port, update `API_BASE` before running the notebooks.
+
 ### Health & Status
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
 | `/health` | GET | System health check |
 | `/market/overview` | GET | Market summary data |
+
+### Features
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/features/generate?symbol=NABIL&date_str=2024-01-15` | POST | Generate features for one symbol/date |
+| `/features/generate-batch` | POST | Generate features for a date range |
+| `/features/generate-multi` | POST | Generate features for multiple symbols |
 
 ### Strategies
 
@@ -124,16 +180,19 @@ Features:
 ## Manual Smoke Verification
 
 1. **Start Backend:**
+
    ```bash
    uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
    ```
 
 2. **Run Smoke Tests:**
+
    ```bash
    python scripts/smoke_test.py
    ```
 
 3. **Run Dashboard:**
+
    ```bash
    streamlit run dashboard/app.py
    ```

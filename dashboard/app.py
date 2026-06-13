@@ -1,6 +1,7 @@
 import datetime as dt
 import json
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -165,6 +166,51 @@ def _safe_float(value: object, default: float = 0.0) -> float:
         return default
 
 
+def _safe_dict(value: object) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _safe_list(value: object) -> list[Any]:
+    return value if isinstance(value, list) else []
+
+
+def _json_bytes(value: object) -> bytes:
+    return json.dumps(value, default=str, indent=2).encode("utf-8")
+
+
+def _csv_bytes(df: pd.DataFrame) -> bytes:
+    return df.to_csv(index=False).encode("utf-8")
+
+
+def _plotly_json(fig: go.Figure | None) -> dict[str, Any] | None:
+    if fig is None:
+        return None
+    try:
+        raw = fig.to_json()
+        if not isinstance(raw, str) or not raw:
+            return None
+        return json.loads(raw)
+    except Exception:
+        return None
+
+
+def _extract_backtest_components(result: object) -> tuple[dict[str, Any], list[Any], list[Any]]:
+    metrics = _safe_dict(result.get("metrics")) if isinstance(result, dict) else {}
+    return metrics, _safe_list(metrics.get("equity_curve")), _safe_list(metrics.get("trades"))
+
+
+def _strategy_label(strategy: dict[str, Any]) -> str:
+    return f"{strategy.get('name', 'Strategy')} (v{strategy.get('version', '0.0.0')})"
+
+
+def _valid_strategies(strategies: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        strategy
+        for strategy in strategies
+        if isinstance(strategy, dict) and _safe_int(strategy.get("id"), -1) != -1
+    ]
+
+
 def _format_currency(value: float) -> str:
     """Format value as currency."""
     if abs(value) >= 1e9:
@@ -196,12 +242,10 @@ def load_strategies() -> list[dict]:
         payload = res.json()
 
         if not isinstance(payload, list):
-            st.warning("⚠️ Unexpected /strategies response format.")
             return []
 
-        return [item for item in payload if isinstance(item, dict)]
-    except Exception as e:
-        st.error(f"⚠️ Failed to load strategies: {e}")
+        return _valid_strategies([item for item in payload if isinstance(item, dict)])
+    except Exception:
         return []
 
 
@@ -211,7 +255,8 @@ def load_market_overview() -> dict | None:
     try:
         res = requests.get(f"{API_BASE}/market/overview", timeout=10)
         res.raise_for_status()
-        return res.json()
+        data = res.json()
+        return data if isinstance(data, dict) else None
     except Exception:
         return None
 
@@ -279,16 +324,18 @@ def page_market_overview():
     # Load market data
     overview = load_market_overview()
     quality_report = get_daily_quality_report()
+    overview_data = _safe_dict(overview)
+    quality_data = _safe_dict(quality_report)
 
     # Key metrics row
-    if overview:
+    if overview_data:
         col1, col2, col3, col4 = st.columns(4)
 
         with col1:
-            nse_change = _safe_float(overview.get("nse_change", 0))
+            nse_change = _safe_float(overview_data.get("nse_change", 0))
             st.metric(
                 "NSE Index",
-                f"{overview.get('nse_value', 'N/A')}",
+                overview_data.get("nse_value", "N/A"),
                 delta=f"{nse_change:.2f}%",
                 delta_color="inverse",
             )
@@ -296,23 +343,23 @@ def page_market_overview():
         with col2:
             st.metric(
                 "Tracked Symbols",
-                overview.get("total_symbols", 0),
-                delta=overview.get("new_symbols_today", 0),
+                overview_data.get("total_symbols", 0),
+                delta=overview_data.get("new_symbols_today", 0),
             )
 
         with col3:
-            vol_change = _safe_float(overview.get("volume_change", 0))
+            vol_change = _safe_float(overview_data.get("volume_change", 0))
             st.metric(
                 "Total Volume",
-                _format_currency(overview.get("total_volume", 0)),
+                _format_currency(overview_data.get("total_volume", 0)),
                 delta=f"{vol_change:.1f}%",
             )
 
         with col4:
             st.metric(
                 "Active Signals",
-                overview.get("active_signals", 0),
-                delta=overview.get("new_signals_today", 0),
+                overview_data.get("active_signals", 0),
+                delta=overview_data.get("new_signals_today", 0),
                 delta_color="off",
             )
     else:
@@ -323,33 +370,33 @@ def page_market_overview():
     # Data quality report
     st.subheader("🔍 Data Quality Report")
 
-    if quality_report:
+    if quality_data:
         col1, col2, col3 = st.columns(3)
 
         with col1:
             st.metric(
                 "Data Completeness",
-                f"{quality_report.get('completeness_score', 0):.1%}",
+                f"{quality_data.get('completeness_score', 0):.1%}",
                 help="Percentage of expected data points received",
             )
 
         with col2:
             st.metric(
                 "Validation Pass Rate",
-                f"{quality_report.get('validation_pass_rate', 0):.1%}",
+                f"{quality_data.get('validation_pass_rate', 0):.1%}",
                 help="Percentage of data passing validation checks",
             )
 
         with col3:
             st.metric(
                 "Avg Trust Score",
-                f"{quality_report.get('avg_trust_score', 0):.2f}/1.0",
+                f"{quality_data.get('avg_trust_score', 0):.2f}/1.0",
                 help="Average data trustworthiness across all symbols",
             )
 
         # Detailed quality breakdown
-        if "quality_by_symbol" in quality_report:
-            df_quality = pd.DataFrame(quality_report["quality_by_symbol"])
+        if "quality_by_symbol" in quality_data:
+            df_quality = pd.DataFrame(quality_data["quality_by_symbol"])
             if not df_quality.empty:
                 st.subheader("Quality by Symbol")
                 st.dataframe(df_quality, use_container_width=True, height=300)
@@ -372,20 +419,21 @@ def page_market_overview():
 
     if st.button("Fetch Trust Score", key="fetch_trust"):
         trust = get_trust_score(lookup_symbol, lookup_date)
-        if trust:
+        trust_data = _safe_dict(trust)
+        if trust_data:
             col1, col2, col3 = st.columns(3)
             with col1:
-                st.metric("Trust Score", f"{trust.get('trust_score', 0):.2f}/1.0")
+                st.metric("Trust Score", f"{trust_data.get('trust_score', 0):.2f}/1.0")
             with col2:
-                status = trust.get("status", "unknown").upper()
+                status = str(trust_data.get("status", "unknown")).upper()
                 color = "🟢" if status == "SAFE" else "🟡" if status == "CAUTION" else "🔴"
                 st.metric("Status", f"{color} {status}")
             with col3:
-                st.metric("Safe?", "✅ Yes" if trust.get("safe") else "❌ No")
+                st.metric("Safe?", "✅ Yes" if trust_data.get("safe") else "❌ No")
 
-            if "components" in trust:
+            if "components" in trust_data:
                 st.caption("**Quality Components:**")
-                comp_df = pd.DataFrame([trust["components"]])
+                comp_df = pd.DataFrame([trust_data["components"]])
                 st.dataframe(comp_df, use_container_width=True)
         else:
             st.error(
@@ -402,24 +450,27 @@ def page_strategies():
     """Strategies overview and management."""
     st.header("🎯 Trading Strategies")
 
-    strategies = load_strategies()
+    strategies = _valid_strategies(load_strategies())
 
     if not strategies:
         st.warning("No strategies found. Create one via the API first.")
         return
 
+    strategy_ids = [_safe_int(strategy.get("id"), -1) for strategy in strategies]
+
     # Strategy selector
     selected_id = st.selectbox(
         "Select Strategy",
-        options=[s["id"] for s in strategies],
+        options=strategy_ids,
         format_func=lambda x: next(
-            (f"{s['name']} (v{s['version']})" for s in strategies if s["id"] == x), "Unknown"
+            (_strategy_label(s) for s in strategies if _safe_int(s.get("id"), -1) == x),
+            "Unknown",
         ),
         key="strategy_selector",
     )
 
     # Display selected strategy details
-    strategy = next((s for s in strategies if s["id"] == selected_id), None)
+    strategy = next((s for s in strategies if _safe_int(s.get("id"), -1) == selected_id), None)
     if strategy:
         col1, col2, col3, col4 = st.columns(4)
 
@@ -462,11 +513,13 @@ def page_backtesting():
     """Backtest execution and results visualization."""
     st.header("🧪 Backtest & Analysis")
 
-    strategies = load_strategies()
+    strategies = _valid_strategies(load_strategies())
 
     if not strategies:
         st.warning("No strategies available. Create one first.")
         return
+
+    strategy_ids = [_safe_int(strategy.get("id"), -1) for strategy in strategies]
 
     # Sidebar configuration
     st.sidebar.header("⚙️ Backtest Config")
@@ -502,9 +555,10 @@ def page_backtesting():
     # Strategy selection
     selected_id = st.sidebar.selectbox(
         "Select Strategy",
-        options=[s["id"] for s in strategies],
+        options=strategy_ids,
         format_func=lambda x: next(
-            (f"{s['name']} (v{s['version']})" for s in strategies if s["id"] == x), "Unknown"
+            (_strategy_label(s) for s in strategies if _safe_int(s.get("id"), -1) == x),
+            "Unknown",
         ),
         key="backtest_strategy",
     )
@@ -541,6 +595,20 @@ def page_backtesting():
         )
         end_date_str = end_date.isoformat() if isinstance(end_date, dt.date) else str(end_date)
 
+        selected_strategy = next(
+            (
+                strategy
+                for strategy in strategies
+                if _safe_int(strategy.get("id"), -1) == selected_id
+            ),
+            None,
+        )
+        if not selected_strategy:
+            st.error("Selected strategy is unavailable.")
+            return
+
+        strategy_config = _safe_dict(selected_strategy.get("config"))
+
         payload = {
             "strategy_id": selected_id_int,
             "config": {
@@ -562,9 +630,7 @@ def page_backtesting():
                 return
 
         # Extract results
-        metrics = result.get("metrics", {}) if isinstance(result, dict) else {}
-        equity_curve = metrics.get("equity_curve", []) if isinstance(metrics, dict) else []
-        trades = metrics.get("trades", []) if isinstance(metrics, dict) else []
+        metrics, equity_curve, trades = _extract_backtest_components(result)
 
         # Performance metrics
         st.subheader("📊 Performance Metrics")
@@ -613,6 +679,11 @@ def page_backtesting():
 
         st.divider()
 
+        fig_equity: go.Figure | None = None
+        fig_drawdown: go.Figure | None = None
+        fig_comparison: go.Figure | None = None
+        benchmark_equity_curve: list[Any] = []
+
         # Equity curve visualization
         st.subheader("📈 Equity Curve")
         if equity_curve:
@@ -621,7 +692,6 @@ def page_backtesting():
                 df_eq["date"] = pd.to_datetime(df_eq["date"])
                 df_eq = df_eq.sort_values("date")
 
-                # Plotly chart
                 fig_equity = go.Figure()
                 fig_equity.add_trace(
                     go.Scatter(
@@ -657,8 +727,8 @@ def page_backtesting():
                 rolling_max = df_eq["equity"].cummax()
                 drawdown_pct = ((df_eq["equity"] - rolling_max) / rolling_max) * 100
 
-                fig_dd = go.Figure()
-                fig_dd.add_trace(
+                fig_drawdown = go.Figure()
+                fig_drawdown.add_trace(
                     go.Scatter(
                         x=df_eq.index,
                         y=drawdown_pct,
@@ -668,7 +738,7 @@ def page_backtesting():
                         fillcolor="rgba(239, 68, 68, 0.1)",
                     )
                 )
-                fig_dd.update_layout(
+                fig_drawdown.update_layout(
                     title="Drawdown Over Time",
                     xaxis_title="Date",
                     yaxis_title="Drawdown (%)",
@@ -677,7 +747,8 @@ def page_backtesting():
                     paper_bgcolor="rgba(0,0,0,0)",
                     font=dict(color="#F8FAFC"),
                 )
-                st.plotly_chart(fig_dd, use_container_width=True)
+
+                st.plotly_chart(fig_drawdown, use_container_width=True)
 
         st.divider()
 
@@ -712,7 +783,8 @@ def page_backtesting():
                 st.warning(f"Benchmark comparison failed: {e}")
                 bench = None
 
-        if bench:
+        bench_data = _safe_dict(bench)
+        if bench_data:
             col1, col2 = st.columns(2)
 
             with col1:
@@ -724,7 +796,7 @@ def page_backtesting():
                 )
 
             with col2:
-                bench_return = _safe_float(bench.get("period_return", 0)) * 100
+                bench_return = _safe_float(bench_data.get("period_return", 0)) * 100
                 st.metric(
                     "Buy & Hold Return",
                     _format_percentage(bench_return),
@@ -732,9 +804,10 @@ def page_backtesting():
                 )
 
             # Compare curves
-            if bench.get("equity_curve"):
+            if bench_data.get("equity_curve"):
                 df_strat = pd.DataFrame(equity_curve)
-                df_bench = pd.DataFrame(bench["equity_curve"])
+                df_bench = pd.DataFrame(bench_data["equity_curve"])
+                benchmark_equity_curve = _safe_list(bench_data.get("equity_curve"))
 
                 if not df_strat.empty and not df_bench.empty:
                     df_strat["date"] = pd.to_datetime(df_strat["date"])
@@ -742,8 +815,8 @@ def page_backtesting():
                     df_strat = df_strat.sort_values("date")
                     df_bench = df_bench.sort_values("date")
 
-                    fig_comp = go.Figure()
-                    fig_comp.add_trace(
+                    fig_comparison = go.Figure()
+                    fig_comparison.add_trace(
                         go.Scatter(
                             x=df_strat["date"],
                             y=df_strat["equity"],
@@ -751,7 +824,7 @@ def page_backtesting():
                             line=dict(color="#0EA5E9", width=2),
                         )
                     )
-                    fig_comp.add_trace(
+                    fig_comparison.add_trace(
                         go.Scatter(
                             x=df_bench["date"],
                             y=df_bench["equity"],
@@ -759,7 +832,7 @@ def page_backtesting():
                             line=dict(color="#F59E0B", width=2),
                         )
                     )
-                    fig_comp.update_layout(
+                    fig_comparison.update_layout(
                         title="Strategy vs Benchmark",
                         xaxis_title="Date",
                         yaxis_title="Equity (Rs.)",
@@ -768,90 +841,104 @@ def page_backtesting():
                         paper_bgcolor="rgba(0,0,0,0)",
                         font=dict(color="#F8FAFC"),
                     )
-                    st.plotly_chart(fig_comp, use_container_width=True)
+                    st.plotly_chart(fig_comparison, use_container_width=True)
 
         st.divider()
 
         # Export options
         st.subheader("⬇️ Export Results")
-        export_format = st.selectbox(
-            "Export Format",
-            [
-                "Bundle (JSON)",
-                "Report (JSON)",
-                "Equity Curve (CSV)",
-                "Trades (CSV)",
-                "Equity Curve (HTML)",
-            ],
-            key="export_fmt",
+
+        backtest_id = (
+            result.get("backtest_id", "unknown") if isinstance(result, dict) else "unknown"
         )
-
-        backtest_id = result.get("backtest_id", "unknown")
-
-        if export_format == "Bundle (JSON)":
-            bundle = {
-                "backtest_id": backtest_id,
-                "strategy_id": selected_id_int,
-                "config": payload["config"],
-                "metrics": metrics,
+        bundle = {
+            "schema_version": "phase6.v1",
+            "backtest_id": backtest_id,
+            "strategy_id": selected_id_int,
+            "strategy_config": strategy_config,
+            "config": payload["config"],
+            "metrics": metrics,
+            "equity_curve": equity_curve,
+            "trades": trades,
+            "datasets": {
                 "equity_curve": equity_curve,
                 "trades": trades,
-                "exported_at": dt.datetime.utcnow().isoformat() + "Z",
-            }
-            json_bytes = json.dumps(bundle, default=str, indent=2).encode("utf-8")
-            st.download_button(
-                label="📥 Download Bundle",
-                data=json_bytes,
-                file_name=f"backtest_{backtest_id}.json",
-                mime="application/json",
-            )
+                "benchmark_equity_curve": benchmark_equity_curve,
+            },
+            "charts": {
+                "equity_curve": _plotly_json(fig_equity),
+                "drawdown": _plotly_json(fig_drawdown),
+                "benchmark_comparison": _plotly_json(fig_comparison),
+            },
+            "exported_at": dt.datetime.utcnow().isoformat() + "Z",
+        }
 
-        elif export_format == "Report (JSON)":
-            json_bytes = json.dumps(result, default=str, indent=2).encode("utf-8")
-            st.download_button(
-                label="📥 Download Report",
-                data=json_bytes,
-                file_name=f"backtest_report_{backtest_id}.json",
-                mime="application/json",
-            )
+        st.download_button(
+            label="📥 Download Full Bundle",
+            data=_json_bytes(bundle),
+            file_name=f"backtest_bundle_{backtest_id}.json",
+            mime="application/json",
+        )
+        st.download_button(
+            label="📥 Download Report JSON",
+            data=_json_bytes(result),
+            file_name=f"backtest_report_{backtest_id}.json",
+            mime="application/json",
+        )
+        st.download_button(
+            label="📥 Download Strategy Config",
+            data=_json_bytes(strategy_config),
+            file_name=f"strategy_config_{selected_id_int}.json",
+            mime="application/json",
+        )
+        st.download_button(
+            label="📥 Download Datasets JSON",
+            data=_json_bytes(bundle["datasets"]),
+            file_name=f"backtest_datasets_{backtest_id}.json",
+            mime="application/json",
+        )
+        st.download_button(
+            label="📥 Download Charts JSON",
+            data=_json_bytes(bundle["charts"]),
+            file_name=f"backtest_charts_{backtest_id}.json",
+            mime="application/json",
+        )
 
-        elif export_format == "Equity Curve (HTML)":
+        col1, col2 = st.columns(2)
+        with col1:
             if equity_curve:
                 df_eq = pd.DataFrame(equity_curve)
-                html_bytes = df_eq.to_html(index=False, border=0, classes="equity-table").encode(
-                    "utf-8"
-                )
-                st.download_button(
-                    label="📥 Equity Curve HTML",
-                    data=html_bytes,
-                    file_name=f"equity_{backtest_id}.html",
-                    mime="text/html",
+                col1.download_button(
+                    label="📥 Equity Curve CSV",
+                    data=_csv_bytes(df_eq),
+                    file_name=f"equity_{backtest_id}.csv",
+                    mime="text/csv",
                 )
             else:
                 st.info("No equity curve data to export.")
 
-        else:
-            col1, col2 = st.columns(2)
-
-            if export_format == "Equity Curve (CSV)" and equity_curve:
-                df_eq = pd.DataFrame(equity_curve)
-                csv = df_eq.to_csv(index=False).encode("utf-8")
-                col1.download_button(
-                    label="📥 Equity Curve CSV",
-                    data=csv,
-                    file_name=f"equity_{backtest_id}.csv",
-                    mime="text/csv",
-                )
-
-            if export_format == "Trades (CSV)" and trades:
+        with col2:
+            if trades:
                 df_tr = pd.DataFrame(trades)
-                csv = df_tr.to_csv(index=False).encode("utf-8")
                 col2.download_button(
                     label="📥 Trades CSV",
-                    data=csv,
+                    data=_csv_bytes(df_tr),
                     file_name=f"trades_{backtest_id}.csv",
                     mime="text/csv",
                 )
+            else:
+                st.info("No trades to export.")
+
+        if equity_curve:
+            df_eq = pd.DataFrame(equity_curve)
+            st.download_button(
+                label="📥 Equity Curve HTML",
+                data=df_eq.to_html(index=False, border=0, classes="equity-table").encode("utf-8"),
+                file_name=f"equity_{backtest_id}.html",
+                mime="text/html",
+            )
+        else:
+            st.info("No equity curve HTML to export.")
 
         st.success("✅ Backtest completed successfully!")
 
@@ -905,12 +992,17 @@ def page_signals():
 
 
 @st.cache_data(ttl=60)
-def load_features(symbol: str) -> dict | None:
+def load_features(symbol: str, date_str: str | None = None) -> dict | None:
     """Load feature generation status for a symbol."""
     try:
-        res = requests.get(f"{API_BASE}/features/generate/{symbol}", timeout=10)
+        params = {
+            "symbol": symbol.upper(),
+            "date_str": date_str or dt.date.today().isoformat(),
+        }
+        res = requests.post(f"{API_BASE}/features/generate", params=params, timeout=10)
         if res.status_code == 200:
-            return res.json()
+            data = res.json()
+            return data if isinstance(data, dict) else None
         return None
     except Exception:
         return None
@@ -921,10 +1013,13 @@ def page_features():
     st.header("🔧 Features")
 
     symbol = st.text_input("Symbol", value="NABIL", key="features_symbol")
+    date_str = st.text_input(
+        "Date (YYYY-MM-DD)", value=dt.date.today().isoformat(), key="features_date"
+    )
 
     if st.button("Generate Features", key="gen_features"):
         with st.spinner("Generating features..."):
-            features = load_features(symbol)
+            features = load_features(symbol, date_str)
             if features:
                 st.json(features)
             else:
@@ -944,7 +1039,8 @@ def load_data_sources() -> list[dict]:
     try:
         res = requests.get(f"{API_BASE}/data-quality/mode-history", timeout=10)
         if res.status_code == 200:
-            return res.json()
+            data = res.json()
+            return data if isinstance(data, list) else []
         return []
     except Exception:
         return []
@@ -972,7 +1068,8 @@ def load_alerts() -> list[dict]:
     try:
         res = requests.get(f"{API_BASE}/data-quality/alerts", timeout=10)
         if res.status_code == 200:
-            return res.json()
+            data = res.json()
+            return data if isinstance(data, list) else []
         return []
     except Exception:
         return []
@@ -1003,7 +1100,8 @@ def load_health_status() -> dict | None:
     try:
         res = requests.get(f"{API_BASE}/health", timeout=5)
         res.raise_for_status()
-        return res.json()
+        data = res.json()
+        return data if isinstance(data, dict) else None
     except Exception:
         return None
 

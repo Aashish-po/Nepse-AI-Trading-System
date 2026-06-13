@@ -1,5 +1,5 @@
 streamlit==1.40.2
-pandas==2.2.3
+pandas>=2.2.3,<3.0.0
 requests==2.32.3
 streamlit-option-menu==0.3.12
 plotly>=5.17.0
