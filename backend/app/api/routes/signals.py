@@ -1,16 +1,20 @@
 """Signal heatmap and backfill API routes."""
 
 import datetime as dt
+from datetime import datetime
 from typing import Annotated
 
 import sqlalchemy as sa
+from app.core.dependencies import get_current_user
 from app.db.session import get_db
 from app.models.signal import Signal
 from app.models.stock import Stock
 from app.schemas.signals import ProviderQuotaResponse, ProviderQuotaSummaryResponse
 from app.services.data_quality_gate import DataQualityGateError
 from app.services.provider_quota import ProviderQuotaService
+from app.services.risk_manager import PositionSizingRequest, RiskManager
 from app.services.signal_backfill import SignalBackfillService
+from app.services.signal_fusion import SignalFusionEngine
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -131,3 +135,113 @@ def backfill_signals(
         return {"error": str(exc)}
     except Exception as exc:  # noqa: BLE001
         return {"error": str(exc)}
+
+
+@router.post("/fuse")
+async def fuse_signal(
+    symbol: str = Query(..., min_length=1, max_length=20),
+    user: dict = Depends(get_current_user),
+    db=Depends(get_db),
+):
+    """
+    Fuse technical + ML + sentiment signals into actionable advisory.
+
+    Response:
+    {
+      "symbol": "NABIL",
+      "signal": "BUY",
+      "confidence": 0.82,
+      "explanation": {...},
+      "risk_assessment": {...},
+      "raw_scores": {"technical": 0.8, "ml": 0.85, "sentiment": 0.75},
+      "weights_used": {"technical": 0.3, "ml": 0.4, "sentiment": 0.3},
+      "is_actionable": true
+    }
+    """
+
+    fusion_engine = SignalFusionEngine(db)
+
+    # Fetch latest signals from each provider
+    technical = await db.query(
+        "SELECT * FROM signals WHERE provider='technical' AND symbol=?", [symbol]
+    )
+    ml = await db.query("SELECT * FROM signals WHERE provider='ml' AND symbol=?", [symbol])
+    sentiment = await db.query(
+        "SELECT * FROM signals WHERE provider='sentiment' AND symbol=?", [symbol]
+    )
+
+    # Infer regime (TODO: implement)
+    regime = "bull"  # placeholder
+
+    # Get risk state
+    risk_mgr = RiskManager(db)
+    risk_state = await risk_mgr.get_risk_state()
+
+    # Fuse
+    fused = await fusion_engine.fuse(
+        symbol=symbol,
+        date=datetime.utcnow(),
+        technical_signal=technical.dict() if technical else None,
+        ml_signal=ml.dict() if ml else None,
+        sentiment_signal=sentiment.dict() if sentiment else None,
+        regime=regime,
+        risk_state=str(risk_state),
+    )
+
+    return {
+        "symbol": fused.symbol,
+        "signal": fused.signal.value,
+        "confidence": fused.confidence,
+        "explanation": fused.explanation,
+        "risk_assessment": fused.risk_assessment,
+        "raw_scores": fused.raw_scores,
+        "weights_used": fused.weights_used,
+        "is_actionable": fused.is_actionable(),
+        "timestamp": fused.date.isoformat(),
+    }
+
+
+@router.get("/risk-state")
+async def get_risk_state(user: dict = Depends(get_current_user), db=Depends(get_db)):
+    """Get current system risk state."""
+    risk_mgr = RiskManager(db)
+    state = await risk_mgr.get_risk_state()
+    kill_switch = await risk_mgr.kill_switch_active()
+
+    return {
+        "risk_state": state.value,
+        "kill_switch_active": kill_switch,
+        "advisory_status": "HOLD_ONLY" if kill_switch else "NORMAL",
+    }
+
+
+@router.post("/position-size")
+async def calculate_position_size(
+    symbol: str,
+    signal: str,
+    portfolio_equity: float,
+    atr: float,
+    user: dict = Depends(get_current_user),
+    db=Depends(get_db),
+):
+    """Calculate max safe position size given current risk state."""
+
+    risk_mgr = RiskManager(db)
+
+    result = await risk_mgr.position_size(
+        PositionSizingRequest(
+            symbol=symbol,
+            signal=signal,
+            portfolio_equity=portfolio_equity,
+            current_position_size=0.0,  # TODO: query from portfolio_snapshots
+            atr=atr,
+        )
+    )
+
+    return {
+        "max_position_size": result.max_position_size,
+        "recommended_position_size": result.recommended_position_size,
+        "stop_loss_price": result.stop_loss_price,
+        "risk_amount": result.risk_amount,
+        "reason": result.reason,
+    }

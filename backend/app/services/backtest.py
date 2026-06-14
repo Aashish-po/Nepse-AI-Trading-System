@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -13,6 +14,7 @@ import numpy as np
 import sqlalchemy as sa
 from app.db.session import SessionLocal
 from app.models.backtest import Backtest
+from app.models.data_quality import HolidayCalendar
 from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.models.price import Price
 from app.models.stock import Stock
@@ -91,6 +93,22 @@ class BacktestEngine:
         equity_curve: list[dict[str, Any]] = []
         trades: list[dict[str, Any]] = []
         pending_signals: list[PendingSignal] = []
+
+        # Deterministic backtest ID: stable hash of the inputs so repeated runs
+        # with the same config produce the same ID (required for determinism tests).
+        identity = hashlib.sha256(
+            (
+                ",".join(sorted(symbols))
+                + "|"
+                + start_date
+                + "|"
+                + end_date
+                + "|"
+                + strategy.name
+                + "|"
+                + strategy.version
+            ).encode()
+        ).hexdigest()[:36]
 
         dates = self._get_trading_dates(start_date, end_date, symbols)
 
@@ -222,7 +240,18 @@ class BacktestEngine:
                                 )
                             )
 
-        return self._calculate_metrics(equity_curve, trades)
+        # Sort for determinism
+        equity_curve = sorted(equity_curve, key=lambda x: x["date"])
+        trades = sorted(trades, key=lambda x: x["timestamp"])
+
+        metrics = self._calculate_metrics(equity_curve, trades)
+
+        return {
+            "backtest_id": identity,
+            "equity_curve": self._json_safe(equity_curve),
+            "trades": self._json_safe(trades),
+            **metrics,
+        }
 
     def _get_trading_dates(
         self,
@@ -230,14 +259,22 @@ class BacktestEngine:
         end_date: str,
         symbols: list[str],
     ) -> list[date]:
-        dates = []
-        start = date.fromisoformat(start_date)
-        end = date.fromisoformat(end_date)
-        current = start
-        while current <= end:
-            dates.append(current)
-            current += timedelta(days=1)
-        return dates
+        session = SessionLocal()
+        try:
+            dates = []
+            start = date.fromisoformat(start_date)
+            end = date.fromisoformat(end_date)
+            current = start
+            while current <= end:
+                holiday = session.scalar(
+                    sa.select(HolidayCalendar).where(HolidayCalendar.date == current)
+                )
+                if holiday is None or holiday.is_trading_day:
+                    dates.append(current)
+                current += timedelta(days=1)
+            return dates
+        finally:
+            session.close()
 
     def _get_price(self, symbol: str, date_str: str) -> dict[str, Any] | None:
         session = SessionLocal()
@@ -442,6 +479,15 @@ class BacktestEngine:
             "equity_curve": equity_curve,
             "trades": trades,
         }
+
+    def _json_safe(self, value: Any) -> Any:
+        if isinstance(value, Decimal):
+            return float(value)
+        if isinstance(value, Mapping):
+            return {key: self._json_safe(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [self._json_safe(item) for item in value]
+        return value
 
     def _calculate_max_drawdown(self, equity_curve: list[dict[str, Any]]) -> float:
         if not equity_curve:

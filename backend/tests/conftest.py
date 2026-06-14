@@ -5,6 +5,28 @@ from pathlib import Path
 
 import pytest
 from app.db.base import Base
+from app.db.models import (  # noqa: F401 — ensure all DB model tables are registered
+    Backtest,
+    DataQualityAlert,
+    DataQualityReport,
+    Dataset,
+    DataSource,
+    DataTrust,
+    EventOverride,
+    Feature,
+    HolidayCalendar,
+    IngestionLog,
+    ModelRegistry,
+    PortfolioSnapshot,
+    Price,
+    Signal,
+    SourceCorrelation,
+    Stock,
+    Strategy,
+    SystemModeHistory,
+    Trade,
+    User,
+)
 from app.db.session import get_db
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine

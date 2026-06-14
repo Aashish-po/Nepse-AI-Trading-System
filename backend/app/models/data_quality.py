@@ -23,6 +23,7 @@ class DataTrust(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     stock_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    symbol: Mapped[str] = mapped_column(String(20), nullable=False)
     date: Mapped[datetime.date] = mapped_column(Date, nullable=False)
     trust_score: Mapped[float] = mapped_column(Float, nullable=False)
     trust_version: Mapped[str] = mapped_column(String(20), nullable=False, default="v1")
