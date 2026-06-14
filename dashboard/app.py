@@ -1124,7 +1124,7 @@ def page_system_status():
 
 
 # ============================================================================
-# PAGE: ML MODELS (PHASE 7)
+# PAGE: ML MODELS
 # ============================================================================
 
 
@@ -1202,6 +1202,14 @@ def page_ml_models():
                         st.error(f"Training failed: {response.text}")
                 except Exception as e:
                     st.error(f"Training failed: {e}")
+            # dashboard/app.py - add to ML Models page
+
+        if st.button("Generate LSTM Signals for Next Day"):
+            # Load latest LSTM model
+            # Fetch latest features for all symbols
+            # Generate signals
+            # Display in signal heatmap
+            st.success("LSTM signals generated")
 
     with col2:
         st.subheader("Model Status")

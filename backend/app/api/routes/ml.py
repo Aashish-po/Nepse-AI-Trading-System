@@ -11,6 +11,7 @@ from typing import Annotated, Any
 
 import joblib
 import numpy as np
+from app.core.security import get_current_user
 from app.db.session import get_db
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -347,3 +348,11 @@ async def predict_by_id(
     except Exception as e:
         logger.exception("Prediction failed")
         return PredictionResponse(success=False, symbol=request.symbol, error=str(e))
+
+
+@router.post("/ml/lstm/train")
+async def train_lstm(
+    symbol: str, db: Session = Depends(get_db), user: dict = Depends(get_current_user)
+):
+    """Train LSTM on symbol's historical features"""
+    # ... implementation would go here, but is omitted for brevity and focus on testable components

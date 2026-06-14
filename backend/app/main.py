@@ -12,6 +12,7 @@ if str(_backend_dir) not in sys.path:
     sys.path.insert(0, str(_backend_dir))
 
 # ruff: noqa: E402
+from app.api.routes import lstm
 from app.api.routes.auth import router as auth_router
 from app.api.routes.data_quality import router as data_quality_router
 from app.api.routes.features import router as features_router
@@ -41,6 +42,7 @@ def create_app() -> FastAPI:
     app.include_router(market_router)
     app.include_router(signals_router)
     app.include_router(strategies_router)
+    app.include_router(lstm.router)
 
     # LAZY-LOAD ml_router to avoid circular imports
     # Only import ml module when app is created and routers are added
