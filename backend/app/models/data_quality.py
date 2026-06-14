@@ -7,6 +7,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 class HolidayCalendar(Base):
     __tablename__ = "holiday_calendar"
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     date: Mapped[datetime.date] = mapped_column(Date, nullable=False, unique=True)
@@ -18,7 +19,11 @@ class HolidayCalendar(Base):
 class DataTrust(Base):
     __tablename__ = "data_trust"
     __table_args__ = (
-        CheckConstraint("trust_score >= 0.0 AND trust_score <= 1.0", name="ck_trust_score_range"),
+        CheckConstraint(
+            "trust_score >= 0.0 AND trust_score <= 1.0",
+            name="ck_trust_score_range",
+        ),
+        {"extend_existing": True},
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -41,6 +46,7 @@ class SourceCorrelation(Base):
             "correlation_score >= 0.0 AND correlation_score <= 1.0",
             name="ck_correlation_score_range",
         ),
+        {"extend_existing": True},
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -56,7 +62,11 @@ class SourceCorrelation(Base):
 class EventOverride(Base):
     __tablename__ = "event_overrides"
     __table_args__ = (
-        CheckConstraint("sensitivity_multiplier > 0", name="ck_sensitivity_positive"),
+        CheckConstraint(
+            "sensitivity_multiplier > 0",
+            name="ck_sensitivity_positive",
+        ),
+        {"extend_existing": True},
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -71,6 +81,7 @@ class EventOverride(Base):
 
 class DataQualityReport(Base):
     __tablename__ = "data_quality_reports"
+    __table_args__ = {"extend_existing": True}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     report_date: Mapped[datetime.date] = mapped_column(Date, nullable=False, unique=True)
@@ -88,7 +99,11 @@ class DataQualityReport(Base):
 class DataQualityAlert(Base):
     __tablename__ = "data_quality_alerts"
     __table_args__ = (
-        CheckConstraint("severity IN ('critical', 'warning', 'info')", name="ck_alert_severity"),
+        CheckConstraint(
+            "severity IN ('critical', 'warning', 'info')",
+            name="ck_alert_severity",
+        ),
+        {"extend_existing": True},
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -105,7 +120,11 @@ class DataQualityAlert(Base):
 class SystemModeHistory(Base):
     __tablename__ = "system_mode_history"
     __table_args__ = (
-        CheckConstraint("mode IN ('NORMAL', 'DEGRADED', 'SAFE_MODE')", name="ck_system_mode"),
+        CheckConstraint(
+            "mode IN ('NORMAL', 'DEGRADED', 'SAFE_MODE')",
+            name="ck_system_mode",
+        ),
+        {"extend_existing": True},
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

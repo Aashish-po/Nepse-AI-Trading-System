@@ -1,3 +1,16 @@
+"""ORM model package.
+
+Importing this package registers every SQLAlchemy model on the shared
+``Base.metadata`` so that ``Base.metadata.create_all()`` (used by the test
+suite and bootstrap code) sees all tables. The previous conflicting model set
+under ``app.db.models.*`` has been removed, so it is now safe to import these.
+"""
+
+from app.db.base import Base
+
+# Import each model module for its side effect of registering tables on Base.
+from app.models.backtest import Backtest
+from app.models.benchmark import NEPSEIndex, SectorIndex
 from app.models.data_quality import (
     DataQualityAlert,
     DataQualityReport,
@@ -9,7 +22,8 @@ from app.models.data_quality import (
 )
 from app.models.data_source import DataSource, IngestionLog
 from app.models.dataset import Dataset
-from app.models.feature import Features
+from app.models.drift_event import DriftEvent
+from app.models.feature import Feature, Features
 from app.models.model_registry import ModelRegistry
 from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.models.price import Price
@@ -21,28 +35,31 @@ from app.models.telegram import TelegramDailyAlert
 from app.models.trade import Trade
 from app.models.user import User
 
-from .backtest import Backtest
-
 __all__ = [
+    "Base",
     "Backtest",
-    "DataQualityAlert",
-    "DataQualityReport",
-    "DataTrust",
-    "DataSource",
-    "Dataset",
-    "EventOverride",
-    "Features",
+    "NEPSEIndex",
+    "SectorIndex",
     "HolidayCalendar",
+    "DataTrust",
+    "SourceCorrelation",
+    "EventOverride",
+    "DataQualityReport",
+    "DataQualityAlert",
+    "SystemModeHistory",
+    "DataSource",
     "IngestionLog",
+    "Dataset",
+    "DriftEvent",
+    "Feature",
+    "Features",
     "ModelRegistry",
     "PortfolioSnapshot",
     "Price",
     "ProviderQuotaUsage",
     "Signal",
-    "SourceCorrelation",
     "Stock",
     "Strategy",
-    "SystemModeHistory",
     "TelegramDailyAlert",
     "Trade",
     "User",

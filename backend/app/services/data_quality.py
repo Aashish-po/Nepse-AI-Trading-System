@@ -73,6 +73,7 @@ class DataQualityService:
             trust_version = details.get("trust_version", "v1")
             trust = DataTrust(
                 stock_id=stock.id,
+                symbol=stock.symbol,
                 date=price.date,
                 trust_score=trust_score,
                 trust_version=trust_version,
@@ -153,6 +154,7 @@ class DataQualityService:
                 trust_version = details.get("trust_version", "v1")
                 trust = DataTrust(
                     stock_id=stock.id,
+                    symbol=stock.symbol,
                     date=price.date,
                     trust_score=trust_score,
                     trust_version=trust_version,

@@ -16,7 +16,6 @@ from app.services.mlflow_tracking import (
     mlflow_tracker,
 )
 from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
 
 
 class FakeRunInfo:
@@ -305,7 +304,6 @@ def test_backtest_service_ignores_unavailable_mlflow_logging(
         autoflush=False,
         autocommit=False,
         class_=Session,
-        poolclass=StaticPool,
     )
     monkeypatch.setattr("app.services.backtest.SessionLocal", TestSessionLocal)
 

@@ -36,6 +36,10 @@ class Settings(BaseSettings):
         default="sqlite:///./nepse_ai.db",
         validation_alias=AliasChoices("DATABASE_URL", "database_url"),
     )
+    database_pool_size: int = Field(
+        default=10,
+        validation_alias=AliasChoices("DATABASE_POOL_SIZE", "database_pool_size"),
+    )
     redis_url: str = Field(
         default="redis://localhost:6379/0",
         validation_alias=AliasChoices("REDIS_URL", "redis_url"),

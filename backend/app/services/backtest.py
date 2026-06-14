@@ -245,13 +245,32 @@ class BacktestEngine:
         trades = sorted(trades, key=lambda x: x["timestamp"])
 
         metrics = self._calculate_metrics(equity_curve, trades)
-
-        return {
-            "backtest_id": identity,
-            "equity_curve": self._json_safe(equity_curve),
-            "trades": self._json_safe(trades),
-            **metrics,
+        # _calculate_metrics echoes equity_curve/trades back; drop them so the
+        # spread below cannot clobber the explicitly json-safe'd versions.
+        metric_fields = {
+            key: value for key, value in metrics.items() if key not in ("equity_curve", "trades")
         }
+
+        config_used = {
+            "initial_capital": float(self.initial_capital),
+            "commission_rate": float(self.commission_rate),
+            "slippage_bps": float(self.slippage_bps),
+            "symbols": symbols,
+            "start_date": start_date,
+            "end_date": end_date,
+        }
+
+        result = {
+            "backtest_id": identity,
+            "strategy_id": getattr(strategy, "id", None),
+            "config": config_used,
+            "metrics": metric_fields,
+            "equity_curve": equity_curve,
+            "trades": trades,
+            # Flattened metrics kept at the top level for backward compatibility.
+            **metric_fields,
+        }
+        return self._json_safe(result)
 
     def _get_trading_dates(
         self,

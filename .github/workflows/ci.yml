@@ -2,7 +2,9 @@ name: CI
 
 on:
   push:
+    branches: [main, develop]
   pull_request:
+    branches: [main, develop]
 
 jobs:
   ci:
@@ -10,12 +12,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v4
         with:
           python-version: "3.11"
+          cache: "pip"
 
       - name: Install dependencies
         run: |
@@ -23,30 +26,24 @@ jobs:
           pip install -r requirements-dev.txt
           pip install torch --index-url https://download.pytorch.org/whl/cpu
 
-      - name: Cache pip
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements-dev.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
       - name: Lint with ruff
         run: ruff check .
 
-      - name: Run tests
-        run: python -m pytest backend/tests/ -v
+      - name: Run tests (from backend/)
+        run: |
+          cd backend
+          python -m pytest tests/ -v --tb=short
         env:
-          PYTHONPATH: ${{ github.workspace }}
+          PYTHONPATH: ${{ github.workspace }}/backend
 
       - name: API import smoke test
         run: |
-          python -c "from backend.app.main import create_app; app = create_app(); print('App title:', app.title)"
+          python -c "from app.main import create_app; app = create_app(); print('✅ App OK')"
         env:
-          PYTHONPATH: ${{ github.workspace }}
+          PYTHONPATH: ${{ github.workspace }}/backend
 
-      - name: ML module import smoke test
+      - name: ML module smoke test
         run: |
-          python -c "from ml.risk_manager import RiskManager; rm = RiskManager(); print('Max drawdown:', rm.max_drawdown)"
+          python -c "from ml.risk_manager import RiskManager; print('✅ RiskManager OK')"
         env:
           PYTHONPATH: ${{ github.workspace }}

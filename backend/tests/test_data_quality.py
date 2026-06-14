@@ -28,7 +28,7 @@ def _seed_price(
             volume=volume,
         )
     )
-    db.commit()
+    db.flush()
 
 
 def test_trust_score_perfect_data(db_session: Session) -> None:

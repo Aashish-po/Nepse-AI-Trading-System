@@ -23,6 +23,7 @@ def _seed_price(db_session, symbol: str, trade_date: dt.date) -> int:
     db_session.add(price)
     trust = DataTrust(
         stock_id=stock.id,
+        symbol=symbol,
         date=trade_date,
         trust_score=0.9,
         trust_version="v1",

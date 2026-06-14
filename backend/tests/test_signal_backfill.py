@@ -30,7 +30,7 @@ def _seed_price(db_session, symbol: str, trade_date: dt.date) -> int:
         volume=1000,
     )
     db_session.add(price)
-    db_session.commit()
+    db_session.flush()
     return stock.id
 
 

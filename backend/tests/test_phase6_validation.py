@@ -77,7 +77,7 @@ def _seed_prices(
                 volume=1000 + i * 10,
             )
         )
-    db.commit()
+    db.flush()
 
 
 def _seed_strategy(
@@ -95,7 +95,7 @@ def _seed_strategy(
         }
     strategy = Strategy(name=name, version=version, config=config)
     db.add(strategy)
-    db.commit()
+    db.flush()
     db.refresh(strategy)
     return strategy
 

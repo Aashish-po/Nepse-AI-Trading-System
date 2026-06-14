@@ -41,7 +41,7 @@ def _seed_price_series(
                 volume=int(1000 + abs(np.random.randn()) * 500),
             )
         )
-    db.commit()
+    db.flush()
     return stock.id
 
 
