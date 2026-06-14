@@ -13,7 +13,7 @@ import pandas as pd
 import sqlalchemy as sa
 from app.db.session import SessionLocal
 from app.models.data_quality import DataTrust
-from app.models.feature import Feature
+from app.models.feature import Features
 from app.models.price import Price
 from app.models.stock import Stock
 from app.services.data_quality import DataQualityService
@@ -209,6 +209,10 @@ class FeatureService:
             feature_weights = [r["feature_weight"] for r in gate_results if r["safe"]]
             trust_versions = [r["trust_version"] for r in gate_results if r["safe"]]
             features_df = self._compute_all_features(safe_df)
+
+            assert (
+                len(features_df) == len(trust_scores) == len(feature_weights) == len(trust_versions)
+            ), "Mismatch between features_df and quality metadata lengths"
 
             feature_corr_penalties = self._compute_feature_correlations(features_df)
 
@@ -811,7 +815,7 @@ class FeatureService:
                 "correlation_penalized": correlation_penalty < 1.0,
             }
 
-            feature = Feature(
+            feature = Features(
                 stock_id=stock.id,
                 date=date.fromisoformat(date_str),
                 feature_version=self._feature_version,
@@ -901,7 +905,7 @@ class FeatureService:
                 }
 
                 features_to_insert.append(
-                    Feature(
+                    Features(
                         stock_id=stock_id,
                         date=row["date"].date(),
                         feature_version=self._feature_version,
@@ -947,12 +951,12 @@ class FeatureService:
             if stock is None:
                 return None
 
-            query = sa.select(Feature).where(
-                Feature.stock_id == stock.id,
-                Feature.date == date.fromisoformat(date_str),
+            query = sa.select(Features).where(
+                Features.stock_id == stock.id,
+                Features.date == date.fromisoformat(date_str),
             )
             if feature_version:
-                query = query.where(Feature.feature_version == feature_version)
+                query = query.where(Features.feature_version == feature_version)
 
             feature = session.scalar(query)
             if feature is None:
@@ -989,29 +993,31 @@ class FeatureService:
                 return {"features": [], "total": 0, "limit": limit, "offset": offset}
 
             query = (
-                sa.select(Feature)
-                .where(Feature.stock_id == stock.id)
-                .order_by(Feature.date.desc())
+                sa.select(Features)
+                .where(Features.stock_id == stock.id)
+                .order_by(Features.date.desc())
                 .limit(limit)
                 .offset(offset)
             )
             if start_date:
-                query = query.where(Feature.date >= start_date)
+                query = query.where(Features.date >= start_date)
             if end_date:
-                query = query.where(Feature.date <= end_date)
+                query = query.where(Features.date <= end_date)
             if feature_version:
-                query = query.where(Feature.feature_version == feature_version)
+                query = query.where(Features.feature_version == feature_version)
 
             features = session.scalars(query).all()
             total_query = (
-                sa.select(sa.func.count()).select_from(Feature).where(Feature.stock_id == stock.id)
+                sa.select(sa.func.count())
+                .select_from(Features)
+                .where(Features.stock_id == stock.id)
             )
             if start_date:
-                total_query = total_query.where(Feature.date >= start_date)
+                total_query = total_query.where(Features.date >= start_date)
             if end_date:
-                total_query = total_query.where(Feature.date <= end_date)
+                total_query = total_query.where(Features.date <= end_date)
             if feature_version:
-                total_query = total_query.where(Feature.feature_version == feature_version)
+                total_query = total_query.where(Features.feature_version == feature_version)
             total = session.scalar(total_query) or 0
 
             results = [

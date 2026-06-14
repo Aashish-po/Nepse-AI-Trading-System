@@ -25,20 +25,16 @@ Use this folder for exploratory workflows.
    PowerShell variant:
 
    ```powershell
-   $env:API_BASE="http://127.0.0.1:8000"
-   ```
-
-   On PowerShell:
-
-   ```powershell
-   $env:API_BASE="http://127.0.0.1:8000"
-   ```
+    $env:API_BASE="http://127.0.0.1:8000"
+    ```
 
 3. Open `01_idea_to_backtest.ipynb`, edit the hypothesis and parameters, then run all cells.
 
-4. Run `02_backtest_and_export.ipynb` to execute the backtest and export JSON, CSV, and chart artifacts.
+4. Open `01_idea_to_backtest.ipynb`, edit the hypothesis and parameters, then run all cells.
 
-5. Run `03_integrate_bundle.ipynb` to package the exported artifacts for the strategy registry.
+5. Run `02_backtest_and_export.ipynb` to execute the backtest and export JSON, CSV, and chart artifacts.
+
+6. Run `03_integrate_bundle.ipynb` to package the exported artifacts for the strategy registry.
 
 ## Workflow overview
 

@@ -6,6 +6,7 @@ from __future__ import annotations
 import logging
 import sys
 from pathlib import Path
+from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
@@ -20,15 +21,14 @@ if str(_workspace_root) not in sys.path:
     sys.path.insert(0, str(_workspace_root))
 
 # Now safe to import everything else
-import pathlib as pathlib
-import sys
 from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Any
+from datetime import date
 
+import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
-from app.models.feature import Feature
+from app.models.feature import Features
 from app.models.price import Price
 from app.models.stock import Stock
 from sqlalchemy import select
@@ -37,14 +37,8 @@ from sqlalchemy.orm import Session
 from ml.feature_vector import build_feature_vector
 from ml.labeling import LabelConfig, create_labels
 
-# ... rest of ml/dataset.py continues unchanged ...
-
 logger = logging.getLogger(__name__)
 ARTIFACTS_DIR = Path(__file__).resolve().parent.parent / "artifacts"
-
-from datetime import date
-
-import pandas as pd
 
 
 @dataclass
@@ -66,6 +60,10 @@ class DatasetBundle:
     returns_train: NDArray[np.float64] | None = None
     returns_val: NDArray[np.float64] | None = None
     returns_test: NDArray[np.float64] | None = None
+
+    # Allow dict-style access used in some tests: bundle['X_train']
+    def __getitem__(self, key: str) -> Any:
+        return getattr(self, key)
 
 
 @dataclass
@@ -247,7 +245,7 @@ class DatasetBuilder:
         if stock is None:
             raise ValueError(f"Stock {symbol} not found")
 
-        f = Feature
+        f = Features
         p = Price
         where_conditions = [
             f.stock_id == stock.id,
@@ -303,7 +301,7 @@ class DatasetBuilder:
         return [s.symbol for s in stocks]
 
     def get_available_feature_versions(self) -> list[str]:
-        return list(self._session.scalars(select(Feature.feature_version).distinct()).all())
+        return list(self._session.scalars(select(Features.feature_version).distinct()).all())
 
     def build_supervised(
         self,
@@ -315,26 +313,8 @@ class DatasetBuilder:
         target_threshold: float = 0.02,
         random_state: int | None = None,
     ) -> tuple[pd.DataFrame, pd.Series]:
-        """
-        Build X, y for supervised learning with time-series safe construction.
+        """Build X, y for supervised learning with time-series safe construction."""
 
-        Time-series safe: NO random shuffling, NO lookahead bias. Features at time t
-        only use data from t-lookback to t-1, labels use returns from t to t+lookahead,
-        and rows are restricted to the inclusive [start_date, end_date] range.
-
-        Args:
-            symbols: List of stock symbols to include
-            start_date: Start date for data range
-            end_date: End date for data range
-            lookback: Number of days of features to include per sample
-            lookahead: Days ahead to compute target return
-            target_threshold: Threshold for classification labels (1/-1/0)
-            random_state: Ignored (time-series safe, no shuffling)
-
-        Returns:
-            X: DataFrame with features from lookback window
-            y: Series with labels (1/-1/0 based on lookahead return vs threshold)
-        """
         all_X = []
         all_y = []
 
@@ -396,12 +376,8 @@ class DatasetBuilder:
         lookahead: int = 1,
         target_threshold: float = 0.02,
     ) -> Iterator[tuple[pd.DataFrame, pd.Series, pd.DataFrame, pd.Series, list[str], list[str]]]:
-        """
-        Time-series cross-validation: walk forward window.
+        """Time-series cross-validation: walk forward window."""
 
-        Yields:
-            (train_X, train_y, test_X, test_y, train_dates, test_dates)
-        """
         all_X, all_y, all_dates, _all_returns, _all_prices = self._build_full_dataset(
             symbols, start_date, end_date, lookahead, target_threshold
         )

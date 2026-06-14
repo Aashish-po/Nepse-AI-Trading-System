@@ -1,14 +1,17 @@
+import importlib
 import sys
 from pathlib import Path
 
 import numpy as np
 import pytest
-import torch
 
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from ml.lstm import LSTMDataset, LSTMModel
+torch = pytest.importorskip("torch")
+ml_lstm = importlib.import_module("ml.lstm")
+LSTMDataset = ml_lstm.LSTMDataset
+LSTMModel = ml_lstm.LSTMModel
 
 
 def test_lstm_data_prep():

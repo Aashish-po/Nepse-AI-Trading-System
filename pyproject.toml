@@ -1,6 +1,9 @@
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]
 pythonpath = ["backend"]
+markers = [
+    "integration: integration tests",
+]
 
 
 # -----------------------------------
@@ -113,5 +116,6 @@ pythonPlatform = "Windows"
 pythonVersion = "3.11"
 mypy_path = "backend"
 ignore_missing_imports = true
+check_untyped_defs = true
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -9,6 +10,10 @@ from pathlib import Path
 import app.models  # noqa: F401
 import numpy as np
 import pytest
+
+# Add project root to path
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
 from app.models.model_registry import ModelRegistry
 from app.models.price import Price
 from app.models.stock import Stock
