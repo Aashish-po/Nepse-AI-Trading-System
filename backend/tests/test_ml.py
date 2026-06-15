@@ -6,6 +6,7 @@ import sys
 from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
+from unittest.mock import patch
 
 import app.models  # noqa: F401
 import numpy as np
@@ -178,12 +179,14 @@ class TestDatasetBuilder:
 
 
 class TestModelTrainer:
-    def test_train_logistic_persists(self, db_session: Session) -> None:
+    @patch("app.services.mlflow_tracking.mlflow_tracker.log_model_training")
+    def test_train_logistic_persists(self, mock_log_model_training, db_session: Session) -> None:
         _seed_price_series(db_session, "TRAIN", "2024-01-01", count=40)
         _seed_features(db_session, "TRAIN")
         builder = DatasetBuilder(session=db_session, feature_version=FEATURE_VERSION)
         bundle = builder.build("TRAIN")
         trainer = ModelTrainer(session=db_session, model_version="test.1.0")
+        mock_log_model_training.return_value = None
         result = trainer.train_logistic(bundle, model_name="logistic")
         assert result.model_path.endswith(".joblib")
         assert result.model_version == "vtest.1.0"

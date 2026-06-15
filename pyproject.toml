@@ -115,8 +115,7 @@ pythonVersion = "3.11"
 pythonPlatform = "Windows"
 
 [tool.mypy]
-pythonVersion = "3.11"
-mypy_path = "backend"
+python_version = 3.11
 ignore_missing_imports = true
 check_untyped_defs = true
 

@@ -47,3 +47,14 @@ jobs:
           python -c "from ml.risk_manager import RiskManager; print('✅ RiskManager OK')"
         env:
           PYTHONPATH: ${{ github.workspace }}
+      
+      - name: Market calendar smoke test
+        run: |
+          python -c "from app.services.market_calendar import MarketCalendar; MarketCalendar(api_key=''); print('✅ MarketCalendar OK')"
+        env:
+          PYTHONPATH: ${{ github.workspace }}/backend
+
+      - name: Type Check (Mypy)
+        run: |
+          pip install types-requests
+          mypy backend/ --ignore-missing-imports

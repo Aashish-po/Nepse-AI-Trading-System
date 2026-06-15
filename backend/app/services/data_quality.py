@@ -31,6 +31,10 @@ class DataQualityService:
             return self._session
         return SessionLocal()
 
+    def close_session(self, session: Session, owns_session: bool) -> None:
+        if owns_session and session is not self._session:
+            session.close()
+
     def evaluate_symbol_date(
         self,
         symbol: str,
@@ -40,6 +44,7 @@ class DataQualityService:
         owns_session = session is None
         if owns_session:
             session = self._get_session()
+        assert session is not None  # Type guard
         try:
             stock = session.scalar(sa.select(Stock).where(Stock.symbol == symbol.upper()))
             if stock is None:
@@ -50,6 +55,9 @@ class DataQualityService:
                     "reason": "stock_not_found",
                     "components": {},
                 }
+
+            assert stock is not None  # type guard
+            # stock is now non-None
 
             price = session.scalar(
                 sa.select(Price).where(
@@ -98,8 +106,7 @@ class DataQualityService:
                 "components": components,
             }
         finally:
-            if owns_session and session is not self._session:
-                session.close()
+            self.close_session(session, owns_session)
 
     def evaluate_symbols_bulk(self, symbols: list[str], date_str: str) -> list[dict[str, Any]]:
         session = self._get_session()
@@ -182,6 +189,27 @@ class DataQualityService:
         finally:
             if owns_session:
                 session.close()
+
+    def evaluate_daily_report(self, session: Session | None = None) -> dict:
+        owns_session = session is None
+        if owns_session:
+            session = self._get_session()
+        assert session is not None  # Type guard
+        try:
+            today = datetime.now(UTC).date()
+            price_count = session.scalar(
+                sa.select(sa.func.count()).select_from(Price).where(Price.date == today)
+            )
+            trust_count = session.scalar(
+                sa.select(sa.func.count()).select_from(DataTrust).where(DataTrust.date == today)
+            )
+            return {
+                "report_date": today.isoformat(),
+                "price_count": price_count or 0,
+                "trust_count": trust_count or 0,
+            }
+        finally:
+            self.close_session(session, owns_session)
 
     def generate_daily_report(self, report_date: str | None = None) -> dict[str, Any]:
         session = self._get_session()
@@ -1279,6 +1307,7 @@ class DataQualityService:
         owns_session = session is None
         if owns_session:
             session = self._get_session()
+        assert session is not None  # Type guard
         try:
             overrides = self.get_active_event_overrides(date_str, symbol)
             multiplier = 1.0
@@ -1294,5 +1323,4 @@ class DataQualityService:
 
             return result
         finally:
-            if owns_session:
-                session.close()
+            self.close_session(session, owns_session)
