@@ -55,6 +55,4 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}/backend
 
       - name: Type Check (Mypy)
-        run: |
-          pip install types-requests
-          mypy backend/ --ignore-missing-imports
+        run: mypy backend/ --ignore-missing-imports
