@@ -41,12 +41,12 @@ except ImportError:
     RF_AVAILABLE = False
 
 try:
-    from xgboost import XGBClassifier  # type: ignore[import-not-found]
+    from xgboost import XGBClassifier
 
     XGB_AVAILABLE = True
 except ImportError:
-    XGBClassifier = None
     XGB_AVAILABLE = False
+    XGBClassifier = None  # type: ignore[assignment]
 
 import uuid
 
@@ -340,9 +340,9 @@ class ModelTrainer:
                 n_estimators=100, random_state=random_state, class_weight="balanced"
             )
         elif model_name == "xgboost":
-            if XGBClassifier is None:
+            if not XGB_AVAILABLE or XGBClassifier is None:
                 raise ValueError("XGBClassifier not available - install xgboost")
-            return XGBClassifier(
+            return XGBClassifier(  # ← mypy now trusts this
                 random_state=random_state, eval_metric="logloss", tree_method="hist"
             )
         else:
