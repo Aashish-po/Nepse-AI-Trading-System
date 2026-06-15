@@ -349,7 +349,7 @@ class ModelTrainer:
             raise ValueError(f"Unknown model: {model_name}")
 
     def _evaluate_model(
-        self, model, X: Any, y: Any, returns: NDArray[np.float64] | None = None
+        self, model, X: Any, y: Any, returns: NDArray[np.floating] | None = None
     ) -> dict[str, float]:
         y_pred = model.predict(X)
 
