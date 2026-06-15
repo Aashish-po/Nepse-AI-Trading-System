@@ -76,6 +76,21 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("DATA_TRUST_SCORE_MINIMUM", "data_trust_score_minimum"),
     )
 
+    calendarific_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("CALENDARIFIC_API_KEY", "calendarific_api_key"),
+    )
+    calendarific_country: str = Field(
+        default="NP",
+        validation_alias=AliasChoices("CALENDARIFIC_COUNTRY", "calendarific_country"),
+    )
+    # When True, only national/public holidays close the market (Calendarific
+    # returns many observance/season entries that NEPSE does not close for).
+    calendarific_national_only: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("CALENDARIFIC_NATIONAL_ONLY", "calendarific_national_only"),
+    )
+
 
 @lru_cache
 def get_settings() -> Settings:
