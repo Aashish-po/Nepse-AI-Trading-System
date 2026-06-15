@@ -3,8 +3,10 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+DEFAULT_SECRET_KEY = "change_me_in_local_env"
 
 
 class Settings(BaseSettings):
@@ -24,7 +26,7 @@ class Settings(BaseSettings):
     )
 
     secret_key: str = Field(
-        default="change_me_in_local_env",
+        default=DEFAULT_SECRET_KEY,
         validation_alias=AliasChoices("SECRET_KEY", "secret_key"),
     )
     access_token_expire_minutes: int = Field(
@@ -90,6 +92,17 @@ class Settings(BaseSettings):
         default=False,
         validation_alias=AliasChoices("CALENDARIFIC_NATIONAL_ONLY", "calendarific_national_only"),
     )
+
+    @model_validator(mode="after")
+    def _require_secret_key_outside_local(self) -> Settings:
+        # A predictable secret lets anyone forge JWTs. Allow the placeholder only
+        # for local/test work; refuse to boot a dev/prod app without a real key.
+        if self.app_env in ("dev", "prod") and self.secret_key == DEFAULT_SECRET_KEY:
+            raise ValueError(
+                "SECRET_KEY must be set to a non-default value when APP_ENV is "
+                f"'{self.app_env}'."
+            )
+        return self
 
 
 @lru_cache
