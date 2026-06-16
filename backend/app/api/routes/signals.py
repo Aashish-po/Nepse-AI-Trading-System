@@ -1,16 +1,20 @@
 """Signal heatmap and backfill API routes."""
 
 import datetime as dt
-from datetime import datetime
+import logging
+from datetime import UTC, datetime, timedelta
 from typing import Annotated
 
+import numpy as np
 import sqlalchemy as sa
 from app.core.security import get_current_user
 from app.db.session import get_db
 from app.models.signal import Signal
 from app.models.stock import Stock
+from app.models.user import User
 from app.schemas.signals import ProviderQuotaResponse, ProviderQuotaSummaryResponse
 from app.services.data_quality_gate import DataQualityGateError
+from app.services.feature import FeatureService
 from app.services.provider_quota import ProviderQuotaService
 from app.services.risk_manager import PositionSizingRequest, RiskManager
 from app.services.signal_backfill import SignalBackfillService
@@ -18,8 +22,22 @@ from app.services.signal_fusion import SignalFusionEngine
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/signals", tags=["signals"])
 DbSession = Annotated[Session, Depends(get_db)]
+CurrentUser = Annotated[User, Depends(get_current_user)]
+
+
+def _latest_signal(db: Session, symbol: str, provider: str) -> Signal | None:
+    """Fetch the most recent signal for a symbol from one provider (parameterized ORM)."""
+    return db.scalar(
+        sa.select(Signal)
+        .join(Stock, Signal.stock_id == Stock.id)
+        .where(Stock.symbol == symbol.upper(), Signal.provider == provider)
+        .order_by(Signal.date.desc())
+        .limit(1)
+    )
 
 
 @router.get("/heatmap/{date_str}")
@@ -27,8 +45,8 @@ def get_signal_heatmap(date_str: str, db: DbSession) -> dict:
     """Get signal distribution heatmap for a date."""
     try:
         parsed_date = dt.date.fromisoformat(date_str)
-    except ValueError:
-        return {"error": "Invalid date format. Use YYYY-MM-DD."}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.") from exc
 
     rows = db.execute(
         sa.select(
@@ -94,6 +112,7 @@ def get_provider_quota(
 
 @router.post("/backfill-all")
 def backfill_all_signals(
+    user: CurrentUser,
     start_date: str,
     end_date: str | None = None,
     db: Session = Depends(get_db),
@@ -110,12 +129,14 @@ def backfill_all_signals(
             upsert=upsert,
         )
     except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status_code=500, detail=str(exc)) from exc
+        logger.exception("backfill_all failed")
+        raise HTTPException(status_code=500, detail="Backfill failed") from exc
 
 
 @router.post("/backfill/{symbol}")
 def backfill_signals(
     symbol: str,
+    user: CurrentUser,
     start_date: str,
     end_date: str | None = None,
     db: Session = Depends(get_db),
@@ -132,68 +153,111 @@ def backfill_signals(
             upsert=upsert,
         )
     except DataQualityGateError as exc:
-        return {"error": str(exc)}
+        # Data-quality block is an expected, client-actionable condition.
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001
-        return {"error": str(exc)}
+        logger.exception("backfill_symbol failed for %s", symbol)
+        raise HTTPException(status_code=500, detail="Backfill failed") from exc
+
+
+def _signal_to_fusion_input(signal: Signal | None) -> dict | None:
+    """Adapt a persisted Signal row to the dict shape SignalFusionEngine expects."""
+    if signal is None:
+        return None
+    return {
+        "signal": signal.signal_type,
+        "confidence": signal.confidence if signal.confidence is not None else 0.5,
+        "probability": signal.value,
+        "score": signal.value,
+    }
 
 
 @router.post("/fuse")
 async def fuse_signal(
+    user: CurrentUser,
     symbol: str = Query(..., min_length=1, max_length=20),
-    user: dict = Depends(get_current_user),
-    db=Depends(get_db),
+    db: Session = Depends(get_db),
 ):
     """
-    Fuse technical + ML + sentiment signals into actionable advisory.
+    Fuse technical + ML + sentiment signals into an actionable advisory.
 
-    Response:
-    {
-      "symbol": "NABIL",
-      "signal": "BUY",
-      "confidence": 0.82,
-      "explanation": {...},
-      "risk_assessment": {...},
-      "raw_scores": {"technical": 0.8, "ml": 0.85, "sentiment": 0.75},
-      "weights_used": {"technical": 0.3, "ml": 0.4, "sentiment": 0.3},
-      "is_actionable": true
-    }
+    Risk enforcement is advisory-only: see ``risk_assessment.enforced``.
     """
-
     fusion_engine = SignalFusionEngine(db)
+    feature_service = FeatureService(session=db)
 
-    # Fetch latest signals from each provider
-    technical = await db.query(
-        "SELECT * FROM signals WHERE provider='technical' AND symbol=?", [symbol]
-    )
-    ml = await db.query("SELECT * FROM signals WHERE provider='ml' AND symbol=?", [symbol])
-    sentiment = await db.query(
-        "SELECT * FROM signals WHERE provider='sentiment' AND symbol=?", [symbol]
-    )
+    # Fetch the latest signal per provider via parameterized ORM queries.
+    technical = _signal_to_fusion_input(_latest_signal(db, symbol, "technical"))
+    ml = _signal_to_fusion_input(_latest_signal(db, symbol, "ml"))
+    sentiment = _signal_to_fusion_input(_latest_signal(db, symbol, "sentiment"))
 
-    # Infer regime (TODO: implement)
-    regime = "bull"  # placeholder
+    # If we don't have an ML signal from normal channels, try to generate one from LSTM
+    if ml is None:
+        try:
+            # Get the last 20 days of features for this symbol for LSTM sequence
+            end_date = datetime.now().date()
+            start_date = end_date - timedelta(days=20)
+            features_dict = feature_service.compute_features_batch(
+                symbol, start_date=start_date.isoformat(), end_date=end_date.isoformat()
+            )
+            if features_dict and "features" in features_dict:
+                # features_dict["features"] should be a dict with feature names as keys
+                # and lists of values over time as values
+                features_data = features_dict["features"]
+                if features_data and len(features_data) > 0:
+                    # Convert to numpy array - we need to transpose to get [time_steps, features]
+                    # Get the length of the time series (should be 20 if we have full data)
+                    first_feature_key = next(iter(features_data))
+                    time_series_length = len(features_data[first_feature_key])
 
-    # Get risk state
+                    if time_series_length > 0:
+                        # Create array of shape [time_steps, num_features]
+                        feature_arrays = []
+                        for feature_name in features_data:
+                            feature_arrays.append(features_data[feature_name])
+
+                        # Transpose to get [time_steps, num_features]
+                        features_array = np.array(feature_arrays).T.astype(np.float32)
+
+                        # Generate LSTM signal
+                        lstm_signal = fusion_engine.generate_lstm_signal(symbol, features_array)
+                        if lstm_signal is not None:
+                            ml = {
+                                "signal": lstm_signal["signal"],
+                                "confidence": lstm_signal["confidence"],
+                                "provider": "lstm",
+                            }
+        except Exception as e:
+            logger.warning(f"Could not generate LSTM signal for {symbol}: {e}")
+            # Continue without ML signal - fusion engine will handle insufficient signals
+
+    # Infer regime (not yet implemented; default neutral-bull).
+    regime = "bull"
+
     risk_mgr = RiskManager(db)
     risk_state = await risk_mgr.get_risk_state()
 
-    # Fuse
     fused = await fusion_engine.fuse(
         symbol=symbol,
-        date=datetime.utcnow(),
-        technical_signal=technical.dict() if technical else None,
-        ml_signal=ml.dict() if ml else None,
-        sentiment_signal=sentiment.dict() if sentiment else None,
+        date=datetime.now(UTC),
+        technical_signal=technical,
+        ml_signal=ml,
+        sentiment_signal=sentiment,
         regime=regime,
-        risk_state=str(risk_state),
+        risk_state=str(risk_state.value),
     )
+
+    risk_assessment = dict(fused.risk_assessment)
+    # Risk guardrails are stubbed (no live portfolio source); flag them as not enforced
+    # so callers never mistake the advisory for real risk control.
+    risk_assessment["enforced"] = False
 
     return {
         "symbol": fused.symbol,
         "signal": fused.signal.value,
         "confidence": fused.confidence,
         "explanation": fused.explanation,
-        "risk_assessment": fused.risk_assessment,
+        "risk_assessment": risk_assessment,
         "raw_scores": fused.raw_scores,
         "weights_used": fused.weights_used,
         "is_actionable": fused.is_actionable(),
@@ -202,8 +266,12 @@ async def fuse_signal(
 
 
 @router.get("/risk-state")
-async def get_risk_state(user: dict = Depends(get_current_user), db=Depends(get_db)):
-    """Get current system risk state."""
+async def get_risk_state(user: CurrentUser, db: Session = Depends(get_db)):
+    """Get current system risk state.
+
+    NOTE: ``enforced`` is False — the underlying drawdown/daily-loss/data-quality checks
+    are not yet wired to a live portfolio source, so this state is advisory only.
+    """
     risk_mgr = RiskManager(db)
     state = await risk_mgr.get_risk_state()
     kill_switch = await risk_mgr.kill_switch_active()
@@ -212,20 +280,23 @@ async def get_risk_state(user: dict = Depends(get_current_user), db=Depends(get_
         "risk_state": state.value,
         "kill_switch_active": kill_switch,
         "advisory_status": "HOLD_ONLY" if kill_switch else "NORMAL",
+        "enforced": False,
     }
 
 
 @router.post("/position-size")
 async def calculate_position_size(
+    user: CurrentUser,
     symbol: str,
     signal: str,
-    portfolio_equity: float,
-    atr: float,
-    user: dict = Depends(get_current_user),
-    db=Depends(get_db),
+    portfolio_equity: Annotated[float, Query(gt=0)],
+    atr: Annotated[float, Query(gt=0)],
+    db: Session = Depends(get_db),
 ):
-    """Calculate max safe position size given current risk state."""
+    """Calculate max safe position size given current risk state.
 
+    Advisory only: ``enforced`` is False until risk gates query live portfolio state.
+    """
     risk_mgr = RiskManager(db)
 
     result = await risk_mgr.position_size(
@@ -244,4 +315,5 @@ async def calculate_position_size(
         "stop_loss_price": result.stop_loss_price,
         "risk_amount": result.risk_amount,
         "reason": result.reason,
+        "enforced": False,
     }

@@ -47,17 +47,15 @@ All outputs are advisory-only and require human review.
 | 3     | Feature Engineering    | Technical indicators, feature store, feature validation    |
 | 4     | Authentication         | User auth, RBAC, JWT handling                              |
 | 5     | Backtesting Engine     | Historical simulation, metrics, scenario testing           |
-| 6     | LSTM & ML Models       | Forecasting, training pipeline, model registry             |
-| 7     | Sentiment & NLP        | XLM-R pipeline, news ingestion, sentiment scoring          |
-| 8     | Reinforcement Learning | PPO / DQN environments, reward functions, HRL              |
-| 9     | Graph Neural Networks  | Graph construction, relationship modeling, GCN             |
-| 10    | Signal Fusion          | Multi-model weighting, confidence calibration, attribution |
-| 11    | Risk Engine            | Position sizing, exposure limits, drawdown protection      |
-| 12    | Portfolio Optimization | Mean-variance, risk parity, rebalancing                    |
-| 13    | Explainability         | SHAP integration, feature importance, audit logging        |
-| 14    | Meta-Learning & MLOps  | Auto-retraining, model selection, hyperparameter evolution |
-| 15    | Dashboard & Alerts     | Market overview, signal explorer, portfolio analytics      |
-| 16    | Production Deployment  | Docker / Kubernetes, CI/CD, monitoring, backups            |
+| 6     | Research Workflow and Dashboard | Streamlit dashboard upgrade, research notebook workflow, validation |
+| 7     | Baseline ML            | Logistic regression, random forest, XGBoost, walk-forward training, promotion gates, model registry API |
+| 8     | LSTM & Sentiment       | LSTM for next-day return forecasting, XLM-R sentiment on news, combine with Phase 7 models |
+| 9     | Signal Fusion & Risk Management | Signal fusion engine, risk manager, fusion API endpoints, provider quota tracking |
+| 10    | Portfolio Optimization | Account simulation with initial capital, cash/positions, transaction logs, allocation methods: equal weight, risk parity, mean-variance, constraints |
+| 11    | Explainability (SHAP)  | SHAP, feature importance, attribution, trade explanations, governance: versioning and approvals before production-ready marking |
+| 12    | Meta-Learning & MLOps  | Auto-retraining, model selection, hyperparameter evolution |
+| 13    | Dashboard & Alerts     | Market overview, signal explorer, portfolio analytics      |
+| 14    | Production Deployment  | Docker / Kubernetes, CI/CD, monitoring, backups            |
 
 Advanced AI (ensemble models, meta-learning), high-frequency workflows, and Kubernetes-scale orchestration are deferred until the MVP proves data quality and backtesting reliability.
 

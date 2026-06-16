@@ -197,15 +197,22 @@ class ModelTrainer:
             returns=bundle_or_dataset.returns_test,
         )
 
+        # Promotion must be decided on out-of-sample (test) performance. Train metrics are
+        # kept separately for diagnostics only — never as the gate's headline numbers.
         metrics = {
-            "accuracy": train_metrics["accuracy"],
-            "precision": train_metrics["precision"],
-            "recall": train_metrics["recall"],
-            "f1_weighted": train_metrics["f1_weighted"],
-            "roc_auc": train_metrics["roc_auc"],
+            "accuracy": test_metrics["accuracy"],
+            "precision": test_metrics["precision"],
+            "recall": test_metrics["recall"],
+            "f1_weighted": test_metrics["f1_weighted"],
+            "roc_auc": test_metrics["roc_auc"],
             "sharpe_ratio": test_metrics.get("sharpe_ratio", 0.0),
             "max_drawdown": test_metrics.get("max_drawdown", 0.0),
             "win_rate": test_metrics.get("win_rate", 0.0),
+            "train_accuracy": train_metrics["accuracy"],
+            "train_precision": train_metrics["precision"],
+            "train_recall": train_metrics["recall"],
+            "train_f1_weighted": train_metrics["f1_weighted"],
+            "train_roc_auc": train_metrics["roc_auc"],
         }
 
         promotion_status = self._promotion_gate(metrics)
@@ -261,14 +268,18 @@ class ModelTrainer:
             return {"error": "No valid folds generated"}
 
         n = len(all_X)
-        for start in range(0, n - train_size - test_size + 1, step):
+        # Embargo between train and test so feature windows (lookback=20) and label
+        # horizons do not straddle the boundary. Mirrors DatasetBuilder.walk_forward_cv.
+        embargo = max(20, 1)
+        for start in range(0, n - train_size - embargo - test_size + 1, step):
             train_end = start + train_size
-            test_end = train_end + test_size
+            test_start = train_end + embargo
+            test_end = test_start + test_size
             train_X = all_X.iloc[start:train_end].reset_index(drop=True)
             train_y = all_y.iloc[start:train_end].reset_index(drop=True)
-            test_X = all_X.iloc[train_end:test_end].reset_index(drop=True)
-            test_y = all_y.iloc[train_end:test_end].reset_index(drop=True)
-            test_returns = np.array(all_returns[train_end:test_end], dtype=np.float64)
+            test_X = all_X.iloc[test_start:test_end].reset_index(drop=True)
+            test_y = all_y.iloc[test_start:test_end].reset_index(drop=True)
+            test_returns = np.array(all_returns[test_start:test_end], dtype=np.float64)
 
             model = self._create_model(model_name, random_state)
             model.fit(train_X.values, train_y.values)

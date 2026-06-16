@@ -3,8 +3,10 @@
 from typing import Annotated
 
 import sqlalchemy as sa
+from app.core.security import get_current_user
 from app.db.session import get_db
 from app.models.backtest import Backtest
+from app.models.user import User
 from app.schemas.strategy import (
     BacktestCreate,
     BenchmarkCompareRequest,
@@ -20,11 +22,13 @@ from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/strategies", tags=["strategies"])
 DbSession = Annotated[Session, Depends(get_db)]
+CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
 @router.post("/", response_model=StrategyResponse)
 def create_strategy(
     request: StrategyCreate,
+    user: CurrentUser,
     db: DbSession,
 ) -> StrategyResponse:
     service = StrategyService(session=db)
@@ -82,6 +86,7 @@ def get_strategy(
 @router.post("/backtests", response_model=dict)
 def run_backtest(
     request: BacktestCreate,
+    user: CurrentUser,
     db: DbSession,
 ) -> dict:
     service = BacktestService(session=db)
@@ -112,6 +117,7 @@ def get_backtest(
 @router.post("/benchmarks/compare", response_model=dict)
 def compare_with_benchmark(
     request: BenchmarkCompareRequest,
+    user: CurrentUser,
     db: DbSession,
 ) -> dict:
     service = BenchmarkService(session=db)

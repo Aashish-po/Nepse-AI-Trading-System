@@ -9,10 +9,10 @@ import sys
 from pathlib import Path
 from typing import Annotated, Any
 
-import joblib
 import numpy as np
 from app.core.security import get_current_user
 from app.db.session import get_db
+from app.models.user import User
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -24,9 +24,11 @@ if str(_workspace_root) not in sys.path:
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["ml"])
 DbSession = Annotated[Session, Depends(get_db)]
+CurrentUser = Annotated[User, Depends(get_current_user)]
 
-# Late import for feature vector (after path setup)
+# Late imports for ml package (after path setup)
 from ml.feature_vector import build_feature_vector  # noqa: E402
+from ml.model_io import safe_load_model  # noqa: E402
 
 
 # Define request/response models here (lightweight, no ml imports)
@@ -95,6 +97,7 @@ class PredictionResponse(BaseModel):
 @router.post("/datasets/build", response_model=DatasetBuildResponse)
 async def build_dataset(
     request: DatasetBuildRequest,
+    user: CurrentUser,
     session: Session = Depends(get_db),
 ) -> DatasetBuildResponse:
     """Build a dataset for a given stock symbol."""
@@ -119,6 +122,7 @@ async def build_dataset(
 @router.post("/models/train", response_model=TrainingResponse)
 async def train_model(
     request: ModelTrainRequest,
+    user: CurrentUser,
     session: Session = Depends(get_db),
 ) -> TrainingResponse:
     """Train ML model for a symbol."""
@@ -151,6 +155,7 @@ async def train_model(
 @router.post("/models/predict", response_model=PredictionResponse)
 async def predict(
     request: PredictionRequest,
+    user: CurrentUser,
 ) -> PredictionResponse:
     """Make predictions for a symbol using feature values."""
     try:
@@ -201,6 +206,7 @@ class TrainModelRequest(BaseModel):
 @router.post("/ml/models/train", response_model=TrainingResponse)
 async def train_model_phase7(
     request: TrainModelRequest,
+    user: CurrentUser,
     session: DbSession,
 ) -> TrainingResponse:
     """Train a baseline ML model with Phase 7 enhancements."""
@@ -295,6 +301,7 @@ async def list_models(session: DbSession, status: str | None = None) -> ListMode
 async def predict_by_id(
     model_id: str,
     request: PredictionRequest,
+    user: CurrentUser,
     session: DbSession,
 ) -> PredictionResponse:
     """Get prediction from a trained model by ID."""
@@ -329,7 +336,7 @@ async def predict_by_id(
         if not entry:
             raise HTTPException(status_code=404, detail="Model not found")
 
-        model = joblib.load(entry.model_artifact_path)
+        model = safe_load_model(entry.model_artifact_path)
         vector = build_feature_vector(request.feature_values)
         X = vector.reshape(1, -1)
         prediction = int(model.predict(X)[0])

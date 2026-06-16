@@ -15,6 +15,7 @@ dashboard/.streamlit/secrets.toml
 venv/
 env/
 ENV/
+.claude/
 
 # Python caches and compiled files
 __pycache__/

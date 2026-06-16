@@ -74,10 +74,9 @@ def compute_macd(
 
     macd = ema_fast - ema_slow
 
-    macd_signal = np.asarray(
-        __import__("pandas").Series(macd).rolling(window=signal, min_periods=signal).mean().values
-    )
-    macd_hist = np.asarray(ema_fast - ema_slow - macd_signal)
+    # The MACD signal line is conventionally a 9-period EMA of the MACD line, not an SMA.
+    macd_signal = compute_ema(macd, signal)
+    macd_hist = np.asarray(macd - macd_signal)
 
     return {
         "macd": np.asarray(macd),
@@ -113,7 +112,10 @@ def compute_atr(
 def compute_returns(prices: Any) -> np.ndarray:
     """Compute periodic returns."""
     prices = np.asarray(prices, dtype=np.float64)
-    returns = np.diff(prices, prepend=np.nan) / np.roll(prices, 1)
+    diff = np.diff(prices, prepend=np.nan)
+    prev = np.roll(prices, 1)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        returns = np.where(prev != 0, diff / prev, np.nan)
     returns[0] = np.nan
     return np.asarray(returns)
 
