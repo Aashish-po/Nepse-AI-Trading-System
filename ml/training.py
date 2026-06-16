@@ -46,7 +46,7 @@ try:
     XGB_AVAILABLE = True
 except ImportError:
     XGB_AVAILABLE = False
-    XGBClassifier = None  # type: ignore[assignment]
+    XGBClassifier = None  # type: ignore[assignment, misc]
 
 import uuid
 
