@@ -1,19 +1,24 @@
 import sys
-from datetime import datetime, timedelta
 from pathlib import Path
 
-import pytest
+# Add backend and project root to sys.path before importing app/ml modules
+backend_dir = str(Path(__file__).parent.parent)
+root_dir = str(Path(__file__).parent.parent.parent)
+for path in (backend_dir, root_dir):
+    if path not in sys.path:
+        sys.path.insert(0, path)
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from datetime import datetime, timedelta  # noqa: E402
 
-from app.db.session import SessionLocal
-from app.models.feature import Features
-from app.models.price import Price
-from app.models.stock import Stock
+import pytest  # noqa: E402
+from app.db.session import SessionLocal  # noqa: E402
+from app.models.feature import Features  # noqa: E402
+from app.models.price import Price  # noqa: E402
+from app.models.stock import Stock  # noqa: E402
+from app.services.signal_fusion import SignalFusionEngine  # noqa: E402
 
-from backend.app.services.signal_fusion import SignalFusionEngine
-from ml.dataset import DatasetBuilder
-from ml.lstm import LSTMTrainer
+from ml.dataset import DatasetBuilder  # noqa: E402
+from ml.lstm import LSTMTrainer  # noqa: E402
 
 
 @pytest.fixture

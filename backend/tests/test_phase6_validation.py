@@ -299,7 +299,7 @@ class TestExportSchemaValidation:
             },
         }
 
-        validated = TrustScoreResponse(**payload)
+        validated = TrustScoreResponse.model_validate(payload)
         assert validated.symbol == "NABIL"
         assert validated.trust_score == 0.92
         assert validated.safe is True
@@ -320,7 +320,7 @@ class TestExportSchemaValidation:
             "quality_by_symbol": [],
         }
 
-        validated = DataQualityReportResponse(**payload)
+        validated = DataQualityReportResponse.model_validate(payload)
         assert validated.total_symbols == 10
         assert validated.completeness_score == 0.95
 
@@ -336,7 +336,7 @@ class TestExportSchemaValidation:
             "common_issues": [["missing_close"], ["zero_volume"]],
         }
 
-        validated = SymbolQualitySummaryResponse(**payload)
+        validated = SymbolQualitySummaryResponse.model_validate(payload)
         assert validated.symbol == "NABIL"
         assert validated.unsafe_days == 5
 

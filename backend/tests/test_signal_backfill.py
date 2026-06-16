@@ -2,10 +2,14 @@ import datetime as dt
 
 from app.models.price import Price
 from app.models.stock import Stock
+from app.services.data_quality_gate import DataQualityGate
 from app.services.signal_backfill import SignalBackfillService
 
 
-class NoopGate:
+class NoopGate(DataQualityGate):
+    def __init__(self, session=None) -> None:
+        super().__init__(session=session)
+
     def assert_safe_for_features(self, symbol: str, date_str: str) -> None:
         return None
 
@@ -41,7 +45,7 @@ def test_signal_backfill_base_and_idempotent(db_session):
 
     entry_rules = [{"rule": "rsi_oversold", "params": {"threshold": 30}}]
 
-    svc = SignalBackfillService(session=db_session, gate=NoopGate())
+    svc = SignalBackfillService(session=db_session, gate=NoopGate(session=db_session))
     result = svc.backfill_symbol(
         symbol,
         start_date=base_date.isoformat(),

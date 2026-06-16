@@ -1,15 +1,21 @@
 # test_signal_fusion.py
 
+import sys
 from datetime import datetime
+from pathlib import Path
 
-import pytest
+# Add backend directory to sys.path before importing app modules
+backend_dir = str(Path(__file__).parent.parent)
+if backend_dir not in sys.path:
+    sys.path.insert(0, backend_dir)
 
-from backend.app.services.risk_manager import (
+import pytest  # noqa: E402
+from app.services.risk_manager import (  # noqa: E402
     PositionSizingRequest,
     RiskManager,
     RiskState,
 )
-from backend.app.services.signal_fusion import SignalFusionEngine, SignalType
+from app.services.signal_fusion import SignalFusionEngine, SignalType  # noqa: E402
 
 
 @pytest.mark.asyncio
