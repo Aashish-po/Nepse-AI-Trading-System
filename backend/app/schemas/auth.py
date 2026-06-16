@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class RegisterRequest(BaseModel):
     email: str
-    password: str
-    role: str = "researcher"
+    # Role is assigned server-side; never trust it from the client (privilege
+    # escalation). It is intentionally not a field here.
+    password: str = Field(min_length=8)
 
 
 class LoginRequest(BaseModel):

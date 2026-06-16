@@ -36,8 +36,8 @@ class ModelEvaluator:
     def evaluate_classification(
         self,
         model: Any,
-        X: NDArray[np.float64],
-        y_true: NDArray[np.float64],
+        X: NDArray[np.floating],
+        y_true: NDArray[np.floating],
     ) -> dict[str, float]:
         y_pred = model.predict(X)
 
@@ -72,8 +72,8 @@ class ModelEvaluator:
     def _roc_auc_score(
         self,
         *,
-        y_true: NDArray[np.float64],
-        y_proba: NDArray[np.float64],
+        y_true: NDArray[np.floating],
+        y_proba: NDArray[np.floating],
     ) -> float:
         unique = np.unique(y_true)
         if y_proba.ndim != 2:
@@ -93,8 +93,8 @@ class ModelEvaluator:
 
     def _brier_score(
         self,
-        y_true: NDArray[np.float64],
-        y_proba: NDArray[np.float64],
+        y_true: NDArray[np.floating],
+        y_proba: NDArray[np.floating],
     ) -> float:
         unique = np.unique(y_true)
         if len(unique) == 2 and y_proba.shape[1] == 2:

@@ -5,7 +5,6 @@ from __future__ import annotations
 import datetime as dt
 import json
 import logging
-import typing
 from typing import Any
 
 import sqlalchemy as sa
@@ -18,9 +17,6 @@ from app.services.feature import FeatureService
 from app.services.provider_quota import ProviderQuotaService
 from app.services.strategy import StrategyService
 from sqlalchemy.orm import Session
-
-if typing.TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 

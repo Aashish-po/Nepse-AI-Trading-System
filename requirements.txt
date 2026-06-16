@@ -15,3 +15,4 @@ mlflow==2.20.3
 joblib==1.4.2
 pyarrow==19.0.1
 imbalanced-learn==0.13.0
+xgboost==3.0.2
