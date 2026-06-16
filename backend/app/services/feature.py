@@ -547,10 +547,9 @@ class FeatureService:
 
         macd = ema_fast - ema_slow
 
-        macd_signal = np.asarray(
-            pd.Series(macd).rolling(window=signal, min_periods=signal).mean().values
-        )
-        macd_hist = np.asarray(ema_fast - ema_slow - macd_signal)
+        # The signal line is conventionally a 9-period EMA of the MACD line, not an SMA.
+        macd_signal = self._compute_ema(macd, signal)
+        macd_hist = np.asarray(macd - macd_signal)
 
         return {
             "macd": np.asarray(macd),
@@ -593,7 +592,10 @@ class FeatureService:
 
     def _compute_returns(self, prices: npt.ArrayLike) -> npt.NDArray[np.float64]:
         prices = np.asarray(prices, dtype=np.float64)
-        returns = np.diff(prices, prepend=np.nan) / np.roll(prices, 1)
+        diff = np.diff(prices, prepend=np.nan)
+        prev = np.roll(prices, 1)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            returns = np.where(prev != 0, diff / prev, np.nan)
         returns[0] = np.nan
         return np.asarray(returns)
 
@@ -654,9 +656,15 @@ class FeatureService:
             if price is None:
                 raise ValueError(f"No price data for {symbol} on {date_str}")
 
+            # Only consider prices up to and including the target date. Without this
+            # bound the latest 60 rows could include bars *after* date_str, leaking
+            # future data into the indicator window during historical backtests.
             prices = session.scalars(
                 sa.select(Price)
-                .where(Price.stock_id == stock.id)
+                .where(
+                    Price.stock_id == stock.id,
+                    Price.date <= date.fromisoformat(date_str),
+                )
                 .order_by(Price.date.desc())
                 .limit(60)
             ).all()

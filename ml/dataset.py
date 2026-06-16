@@ -121,9 +121,6 @@ class DatasetBuilder:
         X = X[valid_mask]
         dates = [d for i, d in enumerate(dates) if valid_mask[i]]
 
-        if self._impute:
-            X = self._impute_features(X)
-
         n = len(X)
         window_days = int(n * window_size)
         step_days = int(n * step_size)
@@ -134,10 +131,16 @@ class DatasetBuilder:
             val_end = min(train_end + int(window_days * 0.15 / 0.7), n)
             test_end = min(val_end + int(window_days * 0.15 / 0.7), n)
 
+            # Per-window imputation: fit medians on this window's train slice only.
+            X_w = X
+            if self._impute:
+                medians = self._fit_impute_medians(X[start:train_end])
+                X_w = self._apply_impute(X, medians)
+
             bundle = DatasetBundle(
-                X_train=X[start:train_end],
-                X_val=X[train_end:val_end],
-                X_test=X[val_end:test_end],
+                X_train=X_w[start:train_end],
+                X_val=X_w[train_end:val_end],
+                X_test=X_w[val_end:test_end],
                 y_train=y[start:train_end],
                 y_val=y[train_end:val_end],
                 y_test=y[val_end:test_end],
@@ -186,12 +189,15 @@ class DatasetBuilder:
         X = X[valid_mask]
         dates = [d for i, d in enumerate(dates) if valid_mask[i]]
 
-        if self._impute:
-            X = self._impute_features(X)
-
         n = len(X)
         train_end = int(n * 0.7)
         val_end = int(n * 0.85)
+
+        # Fit imputation medians on the training slice ONLY, then apply to all splits,
+        # so val/test statistics never leak into the imputed training data.
+        if self._impute:
+            medians = self._fit_impute_medians(X[:train_end])
+            X = self._apply_impute(X, medians)
 
         return DatasetBundle(
             X_train=X[:train_end],
@@ -266,13 +272,19 @@ class DatasetBuilder:
         )
         return list(self._session.execute(stmt).all())
 
-    def _impute_features(self, X: NDArray[np.float64]) -> NDArray[np.float64]:
-        train_medians = np.nanmedian(X, axis=0)
-        train_medians = np.where(np.isnan(train_medians), 0.0, train_medians)
+    def _fit_impute_medians(self, X_train: NDArray[np.float64]) -> NDArray[np.float64]:
+        """Compute per-column medians from the training slice only (no leakage)."""
+        medians = np.nanmedian(X_train, axis=0)
+        return np.where(np.isnan(medians), 0.0, medians)
+
+    def _apply_impute(
+        self, X: NDArray[np.float64], medians: NDArray[np.float64]
+    ) -> NDArray[np.float64]:
+        X = X.copy()
         for i in range(X.shape[1]):
             col = X[:, i]
             mask = np.isnan(col) | np.isinf(col)
-            col[mask] = train_medians[i]
+            col[mask] = medians[i]
             X[:, i] = col
         return X
 
@@ -376,27 +388,35 @@ class DatasetBuilder:
         step: int = 63,
         lookahead: int = 1,
         target_threshold: float = 0.02,
+        lookback: int = 20,
     ) -> Iterator[tuple[pd.DataFrame, pd.Series, pd.DataFrame, pd.Series, list[str], list[str]]]:
-        """Time-series cross-validation: walk forward window."""
+        """Time-series cross-validation: walk forward window.
+
+        An embargo of ``max(lookback, lookahead)`` rows is dropped between the train and
+        test slices so that no test feature window overlaps a training row and no training
+        label horizon reaches into the test period (prevents look-ahead leakage).
+        """
 
         all_X, all_y, all_dates, _all_returns, _all_prices = self._build_full_dataset(
             symbols, start_date, end_date, lookahead, target_threshold
         )
 
         n = len(all_X)
-        if n < train_size + test_size:
+        embargo = max(lookback, lookahead)
+        if n < train_size + embargo + test_size:
             return
 
-        for start in range(0, n - train_size - test_size + 1, step):
+        for start in range(0, n - train_size - embargo - test_size + 1, step):
             train_end = start + train_size
-            test_end = train_end + test_size
+            test_start = train_end + embargo
+            test_end = test_start + test_size
 
             train_X = all_X.iloc[start:train_end].reset_index(drop=True)
             train_y = all_y.iloc[start:train_end].reset_index(drop=True)
-            test_X = all_X.iloc[train_end:test_end].reset_index(drop=True)
-            test_y = all_y.iloc[train_end:test_end].reset_index(drop=True)
+            test_X = all_X.iloc[test_start:test_end].reset_index(drop=True)
+            test_y = all_y.iloc[test_start:test_end].reset_index(drop=True)
             train_dates = all_dates[start:train_end]
-            test_dates = all_dates[train_end:test_end]
+            test_dates = all_dates[test_start:test_end]
 
             yield train_X, train_y, test_X, test_y, train_dates, test_dates
 
