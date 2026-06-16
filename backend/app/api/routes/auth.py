@@ -14,7 +14,9 @@ DbSession = Annotated[Session, Depends(get_db)]
 def register(payload: RegisterRequest, db: DbSession) -> TokenResponse:
     if get_user_by_email(db, payload.email):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User already exists")
-    register_user(db, payload.email, payload.password, payload.role)
+    # Role is intentionally NOT taken from the client; register_user assigns the
+    # default 'researcher' role server-side to prevent privilege escalation.
+    register_user(db, payload.email, payload.password)
     token = authenticate_user(db, payload.email, payload.password)
     if token is None:
         raise HTTPException(
