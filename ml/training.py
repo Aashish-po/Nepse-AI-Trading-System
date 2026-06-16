@@ -41,11 +41,11 @@ except ImportError:
     RF_AVAILABLE = False
 
 try:
-    from xgboost import XGBClassifier  # type: ignore[import-not-found]
+    from xgboost import XGBClassifier
 
     XGB_AVAILABLE = True
 except ImportError:
-    XGBClassifier = None  # type: ignore[misc, assignment]
+    XGBClassifier = None  # type: ignore[assignment, misc]
     XGB_AVAILABLE = False
 
 import uuid
@@ -351,16 +351,16 @@ class ModelTrainer:
                 n_estimators=100, random_state=random_state, class_weight="balanced"
             )
         elif model_name == "xgboost":
-            if XGBClassifier is None:
+            if not XGB_AVAILABLE or XGBClassifier is None:
                 raise ValueError("XGBClassifier not available - install xgboost")
-            return XGBClassifier(
+            return XGBClassifier(  # ← mypy now trusts this
                 random_state=random_state, eval_metric="logloss", tree_method="hist"
             )
         else:
             raise ValueError(f"Unknown model: {model_name}")
 
     def _evaluate_model(
-        self, model, X: Any, y: Any, returns: NDArray[np.float64] | None = None
+        self, model, X: Any, y: Any, returns: NDArray[np.floating] | None = None
     ) -> dict[str, float]:
         y_pred = model.predict(X)
 

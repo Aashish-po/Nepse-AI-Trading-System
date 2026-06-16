@@ -804,7 +804,7 @@ class FeatureService:
 
             has_event_override = bool(event_info is not None and event_info.get("event_types"))
 
-            features_meta = {
+            features_meta: dict[str, Any] = {
                 "trust_score": trust_score,
                 "feature_weight": feature_weight,
                 "confidence_raw": confidence,
@@ -891,7 +891,7 @@ class FeatureService:
 
                 has_event_override = bool(event_info is not None and event_info.get("event_types"))
 
-                features_meta = {
+                features_meta: dict[str, Any] = {
                     "trust_score": trust,
                     "feature_weight": weight,
                     "confidence_raw": confidence,

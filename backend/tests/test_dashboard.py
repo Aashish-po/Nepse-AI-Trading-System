@@ -1,6 +1,8 @@
 """Dashboard utility and API integration tests."""
 
+import json
 from datetime import date
+from typing import Any
 
 import pytest
 
@@ -13,8 +15,8 @@ class TestSafeConversions:
 
         def _safe_int(value: object, default: int = -1) -> int:
             try:
-                return int(value)  # type: ignore[arg-type]
-            except (ValueError, TypeError):
+                return int(str(value)) if value is not None else default
+            except ValueError:
                 return default
 
         assert _safe_int(42) == 42
@@ -26,8 +28,8 @@ class TestSafeConversions:
 
         def _safe_int(value: object, default: int = -1) -> int:
             try:
-                return int(value)  # type: ignore[arg-type]
-            except (ValueError, TypeError):
+                return int(str(value)) if value is not None else default
+            except ValueError:
                 return default
 
         assert _safe_int(None) == -1
@@ -40,8 +42,8 @@ class TestSafeConversions:
 
         def _safe_float(value: object, default: float = 0.0) -> float:
             try:
-                return float(value)  # type: ignore[arg-type]
-            except (ValueError, TypeError):
+                return float(str(value)) if value is not None else default
+            except ValueError:
                 return default
 
         assert _safe_float(42.5) == 42.5
@@ -53,8 +55,8 @@ class TestSafeConversions:
 
         def _safe_float(value: object, default: float = 0.0) -> float:
             try:
-                return float(value)  # type: ignore[arg-type]
-            except (ValueError, TypeError):
+                return float(str(value)) if value is not None else default
+            except ValueError:
                 return default
 
         assert _safe_float(None) == 0.0
@@ -160,7 +162,6 @@ class TestBacktestExport:
 
     def test_bundle_structure(self) -> None:
         """Test backtest bundle has required fields."""
-        import json
 
         bundle = {
             "backtest_id": "test_123",
@@ -241,19 +242,19 @@ class TestEmptyStateHandling:
 
     def test_empty_strategies_list(self) -> None:
         """Test handling empty strategies list."""
-        strategies = []
+        strategies: list[dict[str, Any]] = []
         assert strategies == []
         assert len(strategies) == 0
 
     def test_empty_equity_curve(self) -> None:
         """Test handling empty equity curve."""
-        equity_curve = []
+        equity_curve: list[dict[str, Any]] = []
         assert equity_curve == []
         assert len(equity_curve) == 0
 
     def test_empty_trades(self) -> None:
         """Test handling empty trades list."""
-        trades = []
+        trades: list[dict[str, Any]] = []
         assert trades == []
         assert len(trades) == 0
 
@@ -264,18 +265,18 @@ class TestEmptyStateHandling:
 
     def test_partial_metrics_handling(self) -> None:
         """Test handling partial metrics data."""
-        metrics = {}
+        metrics: dict[str, Any | None] = {"sharpe": None, "max_dd": None, "win_rate": None}
         total_return = metrics.get("total_return", 0) if metrics else 0
         assert total_return == 0
 
     def test_empty_signals_list(self) -> None:
         """Test handling empty signals list."""
-        signals = []
+        signals: list[dict[str, Any]] = []
         assert signals == []
 
     def test_empty_alerts_list(self) -> None:
         """Test handling empty alerts list."""
-        alerts = []
+        alerts: list[dict[str, Any]] = []
         assert alerts == []
 
 
@@ -302,7 +303,7 @@ class TestTrustScoreWarning:
 
     def test_trust_score_components(self) -> None:
         """Test trust score with components dict."""
-        trust = {
+        trust: dict[str, Any] = {
             "trust_score": 0.65,
             "status": "CAUTION",
             "safe": False,
@@ -364,7 +365,7 @@ class TestBenchmarkComparison:
 
     def test_benchmark_result_structure(self) -> None:
         """Test benchmark result has required fields."""
-        bench = {
+        bench: dict[str, Any] = {
             "period_return": 0.15,
             "annualized_return": 0.18,
             "max_drawdown": -0.10,
@@ -389,7 +390,7 @@ class TestNullPointerProtection:
 
     def test_safe_dict_get_nested(self) -> None:
         """Test safe nested dictionary access."""
-        data = {"metrics": {"equity_curve": []}}
+        data: dict[str, Any] = {"metrics": {"equity_curve": []}}
         equity_curve = (
             data.get("metrics", {}).get("equity_curve", [])
             if isinstance(data.get("metrics"), dict)
@@ -399,7 +400,7 @@ class TestNullPointerProtection:
 
     def test_safe_int_in_list_access(self) -> None:
         """Test safe list index access."""
-        items = [{"id": 1, "name": "a"}, {"id": 2, "name": "b"}]
+        items: list[dict[str, Any]] = [{"id": 1, "name": "a"}, {"id": 2, "name": "b"}]
         selected = next((item for item in items if item["id"] == 99), None)
         assert selected is None
 
@@ -408,8 +409,8 @@ class TestNullPointerProtection:
 
         def _safe_float(value: object, default: float = 0.0) -> float:
             try:
-                return float(value)  # type: ignore[arg-type]
-            except (ValueError, TypeError):
+                return float(str(value)) if value is not None else default
+            except ValueError:
                 return default
 
         sharpe = None

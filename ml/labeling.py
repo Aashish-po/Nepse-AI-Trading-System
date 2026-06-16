@@ -26,9 +26,9 @@ class LabelConfig:
 
 
 def create_labels(
-    prices: NDArray[np.float64],
+    prices: NDArray[np.floating],
     config: LabelConfig | None = None,
-) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.bool_]]:
+) -> tuple[NDArray[np.floating], NDArray[np.floating], NDArray[np.bool_]]:
     if config is None:
         config = LabelConfig()
     returns = _future_returns(prices, config.horizon)
@@ -40,7 +40,7 @@ def create_labels(
     return labels[valid], returns[valid], valid
 
 
-def _future_returns(prices: NDArray[np.float64], horizon: int) -> NDArray[np.float64]:
+def _future_returns(prices: NDArray[np.floating], horizon: int) -> NDArray[np.floating]:
     future_prices = np.roll(prices, -horizon)
     future_prices[-horizon:] = np.nan
     with np.errstate(divide="ignore", invalid="ignore"):
@@ -50,8 +50,8 @@ def _future_returns(prices: NDArray[np.float64], horizon: int) -> NDArray[np.flo
 
 
 def _classify(
-    returns: NDArray[np.float64], up_threshold: float, down_threshold: float
-) -> NDArray[np.float64]:
+    returns: NDArray[np.floating], up_threshold: float, down_threshold: float
+) -> NDArray[np.floating]:
     labels = np.where(
         returns >= up_threshold,
         1.0,

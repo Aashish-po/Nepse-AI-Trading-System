@@ -6,6 +6,7 @@ import sys
 from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
+from unittest.mock import patch
 
 import app.models  # noqa: F401
 import numpy as np
@@ -178,12 +179,14 @@ class TestDatasetBuilder:
 
 
 class TestModelTrainer:
-    def test_train_logistic_persists(self, db_session: Session) -> None:
+    @patch("app.services.mlflow_tracking.mlflow_tracker.log_model_training")
+    def test_train_logistic_persists(self, mock_log_model_training, db_session: Session) -> None:
         _seed_price_series(db_session, "TRAIN", "2024-01-01", count=40)
         _seed_features(db_session, "TRAIN")
         builder = DatasetBuilder(session=db_session, feature_version=FEATURE_VERSION)
         bundle = builder.build("TRAIN")
         trainer = ModelTrainer(session=db_session, model_version="test.1.0")
+        mock_log_model_training.return_value = None
         result = trainer.train_logistic(bundle, model_name="logistic")
         assert result.model_path.endswith(".joblib")
         assert result.model_version == "vtest.1.0"
@@ -274,15 +277,15 @@ class TestRiskManagement:
 class TestDriftMonitoring:
     def test_drift_detection_no_drift(self) -> None:
         dm = DriftMonitor(p_threshold=0.05, psi_threshold=0.2)
-        ref = {"feature": np.array([1.0, 2.0, 3.0, 4.0, 5.0] * 20)}
-        cur = {"feature": np.array([1.0, 2.0, 3.0, 4.0, 5.0] * 20)}
+        ref = {"feature": np.array([1.0, 2.0, 3.0, 4.0, 5.0] * 20, dtype=np.float64)}
+        cur = {"feature": np.array([1.0, 2.0, 3.0, 4.0, 5.0] * 20, dtype=np.float64)}
         results = dm.detect(ref, cur)
         assert all(not r.is_drift for r in results)
 
     def test_correlation_monitor(self) -> None:
         cm = CorrelationMonitor(threshold=0.8)
-        ref = np.array([[1, 2], [3, 4], [5, 6], [7, 8]])
-        cur = np.array([[1, 2], [3, 4], [5, 6], [7, 8]])
+        ref = np.array([[1, 2], [3, 4], [5, 6], [7, 8]], dtype=np.float64)
+        cur = np.array([[1, 2], [3, 4], [5, 6], [7, 8]], dtype=np.float64)
         result = cm.detect(ref, cur)
         assert result.get("significant_change") is False
 

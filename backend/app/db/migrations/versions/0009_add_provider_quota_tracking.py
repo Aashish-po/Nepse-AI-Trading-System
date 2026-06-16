@@ -8,6 +8,8 @@ Create Date: 2026-06-12
 
 import sqlalchemy as sa
 from alembic import op
+from typing import Any, List, Tuple
+from sqlalchemy import Column, Integer, Float, String
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.engine.reflection import Inspector
 from sqlalchemy.types import JSON
@@ -70,26 +72,27 @@ def upgrade() -> None:
         )
     else:
         columns = {column["name"] for column in _get_inspector().get_columns("provider_quota_usage")}
-        for name, column in [
-            ("request_count", sa.Column("request_count", sa.Integer(), nullable=False, server_default="0")),
-            ("signal_count", sa.Column("signal_count", sa.Integer(), nullable=False, server_default="0")),
-            ("updated_count", sa.Column("updated_count", sa.Integer(), nullable=False, server_default="0")),
-            ("success_count", sa.Column("success_count", sa.Integer(), nullable=False, server_default="0")),
-            ("failure_count", sa.Column("failure_count", sa.Integer(), nullable=False, server_default="0")),
-            ("skipped_count", sa.Column("skipped_count", sa.Integer(), nullable=False, server_default="0")),
-            ("token_count", sa.Column("token_count", sa.Integer(), nullable=False, server_default="0")),
-            ("cost", sa.Column("cost", sa.Float(), nullable=False, server_default="0")),
-            ("metadata_json", sa.Column("metadata_json", JSON().with_variant(JSONB, "postgresql"), nullable=True)),
+        columns_to_add: list[tuple[str, Column[Any]]] = [
+            ("request_count", Column("request_count", Integer(), nullable=False, server_default="0")),
+            ("signal_count", Column("signal_count", Integer(), nullable=False, server_default="0")),
+            ("updated_count", Column("updated_count", Integer(), nullable=False, server_default="0")),
+            ("success_count", Column("success_count", Integer(), nullable=False, server_default="0")),
+            ("failure_count", Column("failure_count", Integer(), nullable=False, server_default="0")),
+            ("skipped_count", Column("skipped_count", Integer(), nullable=False, server_default="0")),
+            ("token_count", Column("token_count", Integer(), nullable=False, server_default="0")),
+            ("cost", Column("cost", Float(), nullable=False, server_default="0")),
+            ("metadata_json", Column("metadata_json", JSON().with_variant(JSONB, "postgresql"), nullable=True)),
             (
                 "updated_at",
-                sa.Column(
+                Column(
                     "updated_at",
                     sa.DateTime(timezone=True),
                     nullable=False,
                     server_default=sa.func.now(),
                 ),
             ),
-        ]:
+        ]
+        for name, column in columns_to_add:
             if name not in columns:
                 op.add_column("provider_quota_usage", column)
 

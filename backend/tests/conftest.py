@@ -13,6 +13,12 @@ if str(BACKEND_DIR) not in sys.path:
 # same database for seeded data to be visible across sessions.
 os.environ["DATABASE_URL"] = "sqlite:///./test.db"
 
+# Disable MLflow tracking during tests. A developer's local .env may point
+# MLFLOW_TRACKING_URI at a server (e.g. http://localhost:5000) that is not
+# running in CI/test, which would make the MLflow client retry for minutes and
+# block backtest requests. Tests must not depend on an external tracking server.
+os.environ["MLFLOW_ENABLED"] = "false"
+
 from collections.abc import Generator  # noqa: E402
 
 import app.models  # noqa: F401, E402  # registers all ORM models on Base.metadata

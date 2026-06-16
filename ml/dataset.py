@@ -46,9 +46,10 @@ class DatasetBundle:
     X_train: NDArray[np.float64]
     X_val: NDArray[np.float64]
     X_test: NDArray[np.float64]
-    y_train: NDArray[np.float64]
-    y_val: NDArray[np.float64]
-    y_test: NDArray[np.float64]
+    y_train: NDArray[np.floating]
+    y_val: NDArray[np.floating]
+    y_test: NDArray[np.floating]
+
     train_dates: list[str]
     val_dates: list[str]
     test_dates: list[str]
@@ -57,9 +58,9 @@ class DatasetBundle:
     prices_train: NDArray[np.float64] | None = None
     prices_val: NDArray[np.float64] | None = None
     prices_test: NDArray[np.float64] | None = None
-    returns_train: NDArray[np.float64] | None = None
-    returns_val: NDArray[np.float64] | None = None
-    returns_test: NDArray[np.float64] | None = None
+    returns_train: NDArray[np.floating] | None = None
+    returns_val: NDArray[np.floating] | None = None
+    returns_test: NDArray[np.floating] | None = None
 
     # Allow dict-style access used in some tests: bundle['X_train']
     def __getitem__(self, key: str) -> Any:

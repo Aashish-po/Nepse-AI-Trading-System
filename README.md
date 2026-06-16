@@ -369,9 +369,9 @@ Use `research/notebooks/` for exploratory analysis. All experimental results mus
 
 ## Current Phase Status
 
-**Phase 0-6 Implementation Complete**: Foundation, database, data quality, features, backtesting engine, dashboard, and export workflow are implemented.
+**Phase 0-9 Implementation Complete**: Foundation, database, data quality, features, backtesting engine, dashboard, and export workflow (Phases 0-6); baseline ML (Phase 7); LSTM forecasting, multilingual XLM-R/lexicon sentiment, and the NEPSE market calendar (Phase 8); and signal fusion with risk management (Phase 9) are implemented.
 
-**Phase 6 Validation In Progress**: Automated validation gate criteria are being verified through `backend/tests/test_phase6_validation.py`.
+**Validation**: The full test suite passes (`pytest backend/tests/`), including the Phase 6 validation gate (`test_phase6_validation.py`) and the Phase 8 gate (`test_phase8_gate.py`).
 
 ### Completed Features
 
