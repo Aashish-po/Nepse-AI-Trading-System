@@ -144,8 +144,18 @@ class BacktestEngine:
                     actual_price = self._apply_slippage(Decimal(str(next_open)), "buy")
                     volume = price_row.get("volume", 0)
                     risk_rules = strategy.config.get("risk_rules", [])
+                    # Portfolio equity = cash + mark-to-market value of open positions.
+                    # Risk caps are sized against equity, not residual cash, so limits like
+                    # "max 10% of portfolio" stay correct as positions accumulate.
+                    held_value = Decimal("0")
+                    for s, p in positions.items():
+                        close_px = available_prices.get(s, {}).get("close")
+                        mark_px = Decimal(str(close_px)) if close_px else p.entry_price
+                        held_value += Decimal(str(p.quantity)) * mark_px
+                    equity_now = Decimal(str(cash)) + held_value
                     portfolio = {
                         "cash": float(cash),
+                        "equity": float(equity_now),
                         "price": float(next_open),
                         "initial_capital": float(self.initial_capital),
                         "positions": {s: p for s, p in positions.items()},
@@ -181,7 +191,14 @@ class BacktestEngine:
                             )
                     pending_signals.remove(signal)
 
-            positions_value = sum(p.market_value for p in positions.values())
+            # Mark open positions to market at the current bar's close so the equity curve
+            # reflects unrealized P&L. Fall back to entry price only when no close is
+            # available (e.g. data gap / gated bar for that symbol).
+            positions_value = Decimal("0")
+            for sym, pos in positions.items():
+                close_px = available_prices.get(sym, {}).get("close")
+                mark_px = Decimal(str(close_px)) if close_px else pos.entry_price
+                positions_value += Decimal(str(pos.quantity)) * mark_px
             equity = Decimal(str(cash)) + positions_value
             equity_curve.append(
                 {
@@ -419,6 +436,8 @@ class BacktestEngine:
         initial_capital = portfolio.get("initial_capital", cash)
         price = portfolio.get("price", 1)
         positions = portfolio.get("positions", {})
+        # Size exposure caps against total portfolio equity, not just residual cash.
+        equity = portfolio.get("equity", cash)
 
         max_qty = int(cash / price) if price > 0 else 0
 
@@ -428,10 +447,10 @@ class BacktestEngine:
 
             if rule_type == "max_position_size":
                 max_pct = params.get("max_pct", 0.1)
-                max_qty = int(min(max_qty, cash * max_pct / price))
+                max_qty = int(min(max_qty, equity * max_pct / price)) if price > 0 else 0
             elif rule_type == "single_stock_exposure":
                 max_pct = params.get("max_pct", 0.2)
-                max_shares = int(portfolio.get("cash", 0) * max_pct / price)
+                max_shares = int(equity * max_pct / price) if price > 0 else 0
                 max_qty = min(max_qty, max_shares)
             elif rule_type == "max_open_positions":
                 max_pos = params.get("max_count", 5)
@@ -532,65 +551,73 @@ class BacktestEngine:
             return 0.0
         return float(mean_ret / std_ret * (252**0.5))
 
+    def _round_trip_pnls(self, trades: list[dict[str, Any]]) -> list[Decimal]:
+        """Match BUYs and SELLs chronologically per symbol (FIFO) into closed round-trips.
+
+        Each returned value is the realized P&L of one closed lot, net of the entry and
+        exit commission attributable to the matched quantity. This replaces the previous
+        cartesian BUY x SELL matching, which double-counted and ignored chronology.
+        """
+        from collections import defaultdict, deque
+
+        # Process trades in time order so a SELL only matches earlier BUYs.
+        ordered = sorted(trades, key=lambda t: t.get("timestamp", ""))
+        # Per symbol: queue of open buy lots as [qty_remaining, price, cost_per_share].
+        open_lots: dict[str, deque[list[Decimal]]] = defaultdict(deque)
+        pnls: list[Decimal] = []
+
+        for t in ordered:
+            symbol = t["symbol"]
+            qty = Decimal(str(t["quantity"]))
+            price = Decimal(str(t["price"]))
+            if qty <= 0:
+                continue
+            # Commission for this trade, spread per share.
+            cost = Decimal(str(t.get("transaction_cost", 0) or 0))
+            cost_per_share = cost / qty if qty > 0 else Decimal("0")
+
+            if t["action"] == "BUY":
+                open_lots[symbol].append([qty, price, cost_per_share])
+            elif t["action"] == "SELL":
+                remaining = qty
+                lots = open_lots[symbol]
+                while remaining > 0 and lots:
+                    lot = lots[0]
+                    matched = min(remaining, lot[0])
+                    buy_price, buy_cost_ps = lot[1], lot[2]
+                    # Realized P&L net of both legs' commission for the matched shares.
+                    gross = (price - buy_price) * matched
+                    fees = (cost_per_share + buy_cost_ps) * matched
+                    pnls.append(gross - fees)
+                    lot[0] -= matched
+                    remaining -= matched
+                    if lot[0] <= 0:
+                        lots.popleft()
+        return pnls
+
     def _calculate_win_rate(self, trades: list[dict[str, Any]]) -> float:
-        buys = [t for t in trades if t["action"] == "BUY"]
-        sells = [t for t in trades if t["action"] == "SELL"]
-        if not buys or not sells:
+        pnls = self._round_trip_pnls(trades)
+        if not pnls:
             return 0.0
-        profitable = 0
-        for buy in buys:
-            matching_sells = [s for s in sells if s["symbol"] == buy["symbol"]]
-            for sell in matching_sells:
-                if sell["price"] > buy["price"]:
-                    profitable += 1
-                    break
-        return round(profitable / len(buys), 4) if buys else 0.0
+        wins = sum(1 for p in pnls if p > 0)
+        return round(wins / len(pnls), 4)
 
     def _calculate_profit_factor(self, trades: list[dict[str, Any]]) -> float:
-        buys = [t for t in trades if t["action"] == "BUY"]
-        sells = [t for t in trades if t["action"] == "SELL"]
-        if not buys or not sells:
+        pnls = self._round_trip_pnls(trades)
+        if not pnls:
             return 0.0
-
-        gross_profit = Decimal("0")
-        gross_loss = Decimal("0")
-
-        for sell in sells:
-            matching_buys = [b for b in buys if b["symbol"] == sell["symbol"]]
-            for buy in matching_buys:
-                pnl = Decimal(str(sell["price"])) * Decimal(str(sell["quantity"])) - Decimal(
-                    str(buy["price"])
-                ) * Decimal(str(buy["quantity"]))
-                if pnl > 0:
-                    gross_profit += pnl
-                else:
-                    gross_loss += abs(pnl)
-
+        gross_profit = sum((p for p in pnls if p > 0), Decimal("0"))
+        gross_loss = sum((abs(p) for p in pnls if p < 0), Decimal("0"))
         if gross_loss == 0:
             return float(gross_profit) if gross_profit > 0 else 0.0
         return round(float(gross_profit / gross_loss), 4)
 
     def _calculate_expectancy(self, trades: list[dict[str, Any]]) -> float:
-        buys = [t for t in trades if t["action"] == "BUY"]
-        sells = [t for t in trades if t["action"] == "SELL"]
-        if not buys or not sells:
+        pnls = self._round_trip_pnls(trades)
+        if not pnls:
             return 0.0
-
-        total_pnl = Decimal("0")
-        trade_count = 0
-
-        for sell in sells:
-            matching_buys = [b for b in buys if b["symbol"] == sell["symbol"]]
-            for buy in matching_buys:
-                pnl = Decimal(str(sell["price"])) * Decimal(str(sell["quantity"])) - Decimal(
-                    str(buy["price"])
-                ) * Decimal(str(buy["quantity"]))
-                total_pnl += pnl
-                trade_count += 1
-
-        if trade_count == 0:
-            return 0.0
-        return round(float(total_pnl / trade_count), 4)
+        total_pnl = sum(pnls, Decimal("0"))
+        return round(float(total_pnl / len(pnls)), 4)
 
 
 class BacktestService:
