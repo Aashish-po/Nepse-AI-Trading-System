@@ -1,8 +1,10 @@
 from typing import Annotated
 
 import sqlalchemy as sa
+from app.core.security import get_current_user
 from app.db.session import get_db
 from app.models.data_quality import SystemModeHistory
+from app.models.user import User
 from app.schemas.data_quality import (
     DataQualityReportResponse,
     SymbolQualitySummaryResponse,
@@ -14,6 +16,7 @@ from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/data-quality", tags=["data-quality"])
 DbSession = Annotated[Session, Depends(get_db)]
+CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
 @router.get("/trust/{symbol}/{date_str}", response_model=TrustScoreResponse)
@@ -45,7 +48,7 @@ def get_symbol_summary(symbol: str, db: DbSession) -> SymbolQualitySummaryRespon
 
 
 @router.post("/reports/daily", response_model=DataQualityReportResponse)
-def generate_daily_report(db: DbSession) -> DataQualityReportResponse:
+def generate_daily_report(user: CurrentUser, db: DbSession) -> DataQualityReportResponse:
     service = DataQualityService(session=db)
     result = service.generate_daily_report()
     return DataQualityReportResponse(**result)
@@ -58,7 +61,7 @@ def get_alerts(db: DbSession, report_id: int | None = None) -> list[dict]:
 
 
 @router.post("/alerts/{alert_id}/acknowledge")
-def acknowledge_alert(alert_id: int, db: DbSession) -> dict[str, bool]:
+def acknowledge_alert(alert_id: int, user: CurrentUser, db: DbSession) -> dict[str, bool]:
     service = DataQualityService(session=db)
     return {"acknowledged": service.acknowledge_alert(alert_id)}
 
@@ -132,14 +135,16 @@ def get_mode_history(db: DbSession, limit: int = 100) -> list[dict]:
 
 
 @router.post("/sources/recover-blacklisted")
-def recover_blacklisted_sources(db: DbSession, threshold: float = 0.5) -> dict:
+def recover_blacklisted_sources(user: CurrentUser, db: DbSession, threshold: float = 0.5) -> dict:
     service = DataQualityService(session=db)
     recovered = service.recover_blacklisted_sources(recovery_threshold=threshold)
     return {"recovered_sources": recovered}
 
 
 @router.post("/trust/apply-decay")
-def apply_trust_decay(db: DbSession, days_threshold: int = 30, decay_factor: float = 0.95) -> dict:
+def apply_trust_decay(
+    user: CurrentUser, db: DbSession, days_threshold: int = 30, decay_factor: float = 0.95
+) -> dict:
     service = DataQualityService(session=db)
     count = service.apply_trust_decay(days_threshold=days_threshold, decay_factor=decay_factor)
     return {"decayed_records": count}

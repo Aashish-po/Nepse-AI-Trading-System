@@ -1,9 +1,11 @@
 from typing import Annotated
 
 import sqlalchemy as sa
+from app.core.security import get_current_user
 from app.db.session import get_db
 from app.models.price import Price
 from app.models.stock import Stock
+from app.models.user import User
 from app.schemas.ingestion import IngestionRequest
 from app.schemas.market import PriceIngestRequest, PriceResponse
 from app.services.ingestion import IngestionService
@@ -13,6 +15,7 @@ from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/market", tags=["market"])
 DbSession = Annotated[Session, Depends(get_db)]
+CurrentUser = Annotated[User, Depends(get_current_user)]
 PriceLimit = Annotated[int, Query(ge=1, le=1000)]
 PriceOffset = Annotated[int, Query(ge=0)]
 
@@ -40,7 +43,9 @@ def get_prices(
 
 
 @router.post("/ingest", response_model=PriceResponse, status_code=status.HTTP_201_CREATED)
-def ingest_market_price(payload: PriceIngestRequest, db: DbSession) -> PriceResponse:
+def ingest_market_price(
+    payload: PriceIngestRequest, user: CurrentUser, db: DbSession
+) -> PriceResponse:
     price = ingest_price(db, payload)
     return PriceResponse(
         symbol=payload.symbol.upper(),
@@ -57,6 +62,7 @@ def ingest_market_price(payload: PriceIngestRequest, db: DbSession) -> PriceResp
 def ingest_batch(
     payload: IngestionRequest,
     symbol: str,
+    user: CurrentUser,
     db: DbSession,
 ) -> dict[str, object]:
     service = IngestionService(source=payload.source)

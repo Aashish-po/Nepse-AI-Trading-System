@@ -115,22 +115,26 @@ class RiskManager:
         risk_state = await self.get_risk_state()
         return risk_state in [RiskState.CRITICAL, RiskState.SAFE_MODE]
 
+    # ------------------------------------------------------------------
+    # NOT IMPLEMENTED: the checks below have no live portfolio/holdings data
+    # source yet, so they return permissive defaults (drawdown=0, checks pass).
+    # This means risk enforcement is ADVISORY ONLY. API responses expose
+    # ``enforced: False`` so callers never treat these as real risk controls.
+    # Do not rely on get_risk_state()/kill_switch_active() to block live trades.
+    # ------------------------------------------------------------------
+
     async def _current_drawdown(self) -> float:
-        """Query portfolio snapshots, compute peak-to-trough."""
-        # TODO: Implement
+        """NOT IMPLEMENTED: no portfolio snapshot source. Returns 0.0 (no drawdown)."""
         return 0.0
 
     async def _current_daily_loss(self) -> float:
-        """Query transaction logs, compute today's P&L."""
-        # TODO: Implement
+        """NOT IMPLEMENTED: no transaction-log source. Returns 0.0 (no loss)."""
         return 0.0
 
     async def _check_data_quality(self) -> bool:
-        """Trust scores >= 0.7 for majority of symbols?"""
-        # TODO: Query trust_scores table
+        """NOT IMPLEMENTED: no trust-score wiring here. Returns True (passes)."""
         return True
 
     async def _get_sector_constraint(self, symbol: str) -> float:
-        """Max position size given sector exposure."""
-        # TODO: Query holdings by sector
+        """NOT IMPLEMENTED: no sector holdings source. Returns inf (no constraint)."""
         return float("inf")

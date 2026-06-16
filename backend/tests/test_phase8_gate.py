@@ -11,9 +11,9 @@ from app.models.feature import Features
 from app.models.price import Price
 from app.models.stock import Stock
 
+from backend.app.services.signal_fusion import SignalFusionEngine
 from ml.dataset import DatasetBuilder
 from ml.lstm import LSTMTrainer
-from ml.signal_fusion import SignalFusionEngine
 
 
 @pytest.fixture
@@ -117,9 +117,9 @@ class TestPhase8Gate:
         except Exception as e:
             pytest.fail(f"LSTM failed: {str(e)}")
 
-    def test_signal_fusion_3way(self):
+    def test_signal_fusion_3way(self, db_with_data):
         """Signal fusion: 3-provider consensus"""
-        engine = SignalFusionEngine()
+        engine = SignalFusionEngine(db_with_data)
         signals = {
             "technical": {"signal": "BUY", "confidence": 0.90},
             "lstm": {"signal": "BUY", "confidence": 0.85},
@@ -129,9 +129,9 @@ class TestPhase8Gate:
         assert result["signal"] == "BUY"
         assert result["confidence"] > 0.7
 
-    def test_signal_fusion_conflicting(self):
+    def test_signal_fusion_conflicting(self, db_with_data):
         """Signal fusion: conflicting signals"""
-        engine = SignalFusionEngine()
+        engine = SignalFusionEngine(db_with_data)
         signals = {
             "technical": {"signal": "BUY", "confidence": 0.90},
             "lstm": {"signal": "SELL", "confidence": 0.85},
@@ -141,9 +141,9 @@ class TestPhase8Gate:
         assert result["signal"] in ["BUY", "SELL", "HOLD"]
         assert 0 <= result["confidence"] <= 1
 
-    def test_signal_fusion_missing_provider(self):
+    def test_signal_fusion_missing_provider(self, db_with_data):
         """Signal fusion: partial signals"""
-        engine = SignalFusionEngine()
+        engine = SignalFusionEngine(db_with_data)
         signals = {"technical": {"signal": "BUY", "confidence": 0.90}}
         result = engine.fuse_signals(signals)
         assert result["signal"] in ["BUY", "SELL", "HOLD"]

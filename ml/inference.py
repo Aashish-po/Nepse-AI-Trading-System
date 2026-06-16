@@ -6,10 +6,10 @@ import logging
 from pathlib import Path
 from typing import Any
 
-import joblib
 import numpy as np
 
 from ml.feature_vector import FEATURE_ORDER, build_feature_vector
+from ml.model_io import safe_load_model
 
 logger = logging.getLogger(__name__)
 
@@ -76,7 +76,8 @@ class Predictor:
             raise ValueError(f"Model {model_id} not found in registry")
 
         model_path = Path(entry.model_artifact_path)
-        _ = joblib.load(model_path)
+        # Registry-sourced path: must live under the trusted models directory.
+        _ = safe_load_model(model_path)
         return cls(model_name=entry.name, model_version=entry.version, model_dir=model_path.parent)
 
     def _load(self) -> Any:
@@ -86,6 +87,4 @@ class Predictor:
             else self._model_version
         )
         path = self._model_dir / f"{self._model_name}_{version_tag}.joblib"
-        if not path.exists():
-            raise FileNotFoundError(f"Model file not found: {path}")
-        return joblib.load(path)
+        return safe_load_model(path, allowed_dir=self._model_dir)
