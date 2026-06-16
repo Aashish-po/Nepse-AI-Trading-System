@@ -37,7 +37,7 @@ try:
 
     RF_AVAILABLE = True
 except ImportError:
-    RandomForestClassifier = None
+    RandomForestClassifier = None  # type: ignore[misc, assignment]
     RF_AVAILABLE = False
 
 try:
@@ -45,7 +45,7 @@ try:
 
     XGB_AVAILABLE = True
 except ImportError:
-    XGBClassifier = None
+    XGBClassifier = None  # type: ignore[misc, assignment]
     XGB_AVAILABLE = False
 
 import uuid

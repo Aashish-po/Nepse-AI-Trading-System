@@ -75,15 +75,32 @@ def db_engine(_schema):
 
 @pytest.fixture
 def client(db_session):
-    """FastAPI test client backed by the shared test session."""
+    """FastAPI test client backed by the shared test session.
+
+    Authentication is stubbed: mutating routes now require ``get_current_user``, so the
+    fixture injects a fixed test user. Auth *enforcement* itself is covered separately in
+    test_auth.py; route tests here run as an authenticated researcher.
+    """
+    from app.core.security import get_current_user
     from app.main import create_app
+    from app.models.user import User
 
     test_app = create_app()
 
     def override_get_db():
         yield db_session
 
+    def override_get_current_user():
+        return User(
+            id="test-user",
+            email="test@example.com",
+            hashed_password="x",
+            role="researcher",
+        )
+
     test_app.dependency_overrides[get_db] = override_get_db
+    test_app.dependency_overrides[get_current_user] = override_get_current_user
     with TestClient(test_app) as c:
         yield c
     test_app.dependency_overrides.pop(get_db, None)
+    test_app.dependency_overrides.pop(get_current_user, None)
