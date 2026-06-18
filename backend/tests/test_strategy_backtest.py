@@ -3,12 +3,13 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
+import polars as pl
 from app.models.benchmark import NEPSEIndex, SectorIndex
 from app.models.price import Price
 from app.models.stock import Stock
 from app.models.strategy import Strategy
 from app.models.trade import Trade
-from app.services.backtest import BacktestEngine
+from app.services.backtest import BacktestEngine, VectorizedBacktestEngine
 from app.services.benchmark import BenchmarkService
 from app.services.strategy import StrategyService
 from sqlalchemy import select
@@ -225,6 +226,29 @@ class TestBenchmarkService:
         ]
         result = engine._calculate_expectancy(trades)
         assert result == 500.0
+
+
+class TestVectorizedBacktestEngine:
+    """Tests for the vectorized backtest engine (Phase 10)."""
+
+    def test_init(self) -> None:
+        """VectorizedBacktestEngine initializes with same params as BacktestEngine."""
+        vec_engine = VectorizedBacktestEngine(
+            initial_capital=Decimal("500000"),
+            commission_rate=Decimal("0.01"),
+            slippage_bps=Decimal("10"),
+        )
+
+        assert vec_engine.initial_capital == Decimal("500000")
+        assert vec_engine.commission_rate == Decimal("0.01")
+        assert vec_engine.slippage_bps == Decimal("10")
+
+    def test_import_polars(self) -> None:
+        """Polars is available for vectorized operations."""
+        assert pl is not None
+        # Basic Polars operation test
+        df = pl.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]})
+        assert df.shape == (3, 2)
 
 
 class TestModelsIntegration:
