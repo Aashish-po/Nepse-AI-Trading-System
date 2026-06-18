@@ -86,7 +86,7 @@ def upgrade() -> None:
 
     op.create_table(
         "prices",
-        sa.Column("id", sa.BigInteger(), nullable=False),
+        sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("stock_id", sa.Integer(), nullable=False),
         sa.Column("date", sa.Date(), nullable=False),
         sa.Column("open", sa.Numeric(precision=18, scale=4), nullable=True),
@@ -108,7 +108,7 @@ def upgrade() -> None:
 
     op.create_table(
         "features",
-        sa.Column("id", sa.BigInteger(), nullable=False),
+        sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("stock_id", sa.Integer(), nullable=False),
         sa.Column("date", sa.Date(), nullable=False),
         sa.Column("feature_version", sa.String(length=50), nullable=False),
@@ -126,7 +126,7 @@ def upgrade() -> None:
 
     op.create_table(
         "signals",
-        sa.Column("id", sa.BigInteger(), nullable=False),
+        sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("stock_id", sa.Integer(), nullable=False),
         sa.Column("date", sa.Date(), nullable=False),
         sa.Column("signal_type", sa.String(length=50), nullable=False),
@@ -155,7 +155,7 @@ def upgrade() -> None:
 
     op.create_table(
         "portfolio_snapshots",
-        sa.Column("id", sa.BigInteger(), nullable=False),
+        sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("backtest_id", sa.Integer(), nullable=False),
         sa.Column("date", sa.Date(), nullable=False),
         sa.Column("equity", sa.Numeric(precision=18, scale=4), nullable=False),
@@ -167,7 +167,7 @@ def upgrade() -> None:
 
     op.create_table(
         "trades",
-        sa.Column("id", sa.BigInteger(), nullable=False),
+        sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("backtest_id", sa.Integer(), nullable=False),
         sa.Column("stock_id", sa.Integer(), nullable=False),
         sa.Column("action", sa.String(length=10), nullable=False),

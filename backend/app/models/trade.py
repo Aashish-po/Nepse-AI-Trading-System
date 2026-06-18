@@ -2,15 +2,15 @@ from datetime import datetime
 from decimal import Decimal
 
 from app.db.base import Base
-from app.models.types import big_int_pk_type
 from sqlalchemy import DateTime, ForeignKey, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 
 class Trade(Base):
     __tablename__ = "trades"
+    __table_args__ = {"extend_existing": True}
 
-    id: Mapped[int] = mapped_column(big_int_pk_type, primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
     backtest_id: Mapped[int] = mapped_column(ForeignKey("backtests.id"), nullable=False)
     stock_id: Mapped[int] = mapped_column(ForeignKey("stocks.id"), nullable=False)
     action: Mapped[str] = mapped_column(String(10), nullable=False)
