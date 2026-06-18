@@ -380,7 +380,7 @@ class SignalFusionEngine:
             if not recent_backtests:
                 return None
 
-            performance_data = {
+            performance_data: dict[str, list[dict[str, float]]] = {
                 "technical": [],
                 "lstm": [],
                 "sentiment": [],
