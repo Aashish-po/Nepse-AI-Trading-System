@@ -45,7 +45,8 @@ def test_signal_backfill_base_and_idempotent(db_session):
 
     entry_rules = [{"rule": "rsi_oversold", "params": {"threshold": 30}}]
 
-    svc = SignalBackfillService(session=db_session, gate=NoopGate(session=db_session))
+    svc = SignalBackfillService(session=db_session, gate=None)
+
     result = svc.backfill_symbol(
         symbol,
         start_date=base_date.isoformat(),

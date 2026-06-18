@@ -1,4 +1,6 @@
+# ruff: noqa: E402
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 
 # Add backend and project root to sys.path before importing app/ml modules
@@ -8,17 +10,15 @@ for path in (backend_dir, root_dir):
     if path not in sys.path:
         sys.path.insert(0, path)
 
-from datetime import datetime, timedelta  # noqa: E402
+import pytest
+from app.db.session import SessionLocal
+from app.models.feature import Features
+from app.models.price import Price
+from app.models.stock import Stock
+from app.services.signal_fusion import SignalFusionEngine
 
-import pytest  # noqa: E402
-from app.db.session import SessionLocal  # noqa: E402
-from app.models.feature import Features  # noqa: E402
-from app.models.price import Price  # noqa: E402
-from app.models.stock import Stock  # noqa: E402
-from app.services.signal_fusion import SignalFusionEngine  # noqa: E402
-
-from ml.dataset import DatasetBuilder  # noqa: E402
-from ml.lstm import LSTMTrainer  # noqa: E402
+from ml.dataset import DatasetBuilder
+from ml.lstm import LSTMTrainer
 
 
 @pytest.fixture
