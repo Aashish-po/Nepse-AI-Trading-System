@@ -30,11 +30,9 @@ Use this folder for exploratory workflows.
 
 3. Open `01_idea_to_backtest.ipynb`, edit the hypothesis and parameters, then run all cells.
 
-4. Open `01_idea_to_backtest.ipynb`, edit the hypothesis and parameters, then run all cells.
+4. Run `02_backtest_and_export.ipynb` to execute the backtest and export JSON, CSV, and chart artifacts.
 
-5. Run `02_backtest_and_export.ipynb` to execute the backtest and export JSON, CSV, and chart artifacts.
-
-6. Run `03_integrate_bundle.ipynb` to package the exported artifacts for the strategy registry.
+5. Run `03_integrate_bundle.ipynb` to package the exported artifacts for the strategy registry.
 
 ## Workflow overview
 
@@ -201,8 +199,8 @@ If the backend runs on a different host or port, update `API_BASE` before runnin
 
 ## Notes
 
-- Notebook outputs are not production evidence until reproduced through verified pipeline
+- Notebook outputs are exploratory only — not production evidence until reproduced through the verified pipeline
 - Use `streamlit_option_menu` for navigation in dashboard
 - Chart exports available as JSON definitions for further customization
 - Currency formatting: Rs.K (thousands), Rs.M (millions), Rs.B (billions)
-- Trust score thresholds: SAFE >= 0.5, CAUTION >= 0.3, UNSAFE < 0.3
+- Trust score thresholds (per the data-quality gate): `excellent` >= 0.85, `warning` 0.70–0.84, `unsafe` < 0.70

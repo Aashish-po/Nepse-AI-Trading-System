@@ -79,6 +79,19 @@ Penalties are subtracted and clamped to `[0.0, 1.0]`.
 | 0.70 – 0.84 | `warning` | Reduced weight |
 | < 0.70 | `unsafe` | Hard block |
 
+### 4.2.1 System Modes
+
+Aggregate gate state is reported as one of three system modes (the `SystemMode`
+enum in `data_quality_gate.py`):
+
+| Mode | Meaning |
+|---|---|
+| `NORMAL` | Data is trustworthy; full computation proceeds. |
+| `DEGRADED` | Warning-zone data present; outputs proceed under soft 0.5 weighting. |
+| `SAFE_MODE` | Unsafe data ratio is too high; feature generation and backtests are suspended. |
+
+`unsafe` data is hard-blocked; `warning`/`DEGRADED` data is soft-weighted rather than blocked.
+
 ### 4.3 Idempotency
 
 `DataQualityGate.check()` MUST be idempotent for the same symbol/date within a single session. Repeated calls MUST return the same `QualityGateResult` without side effects, except for `HolidayCalendar` backfill of `is_trading_day`.

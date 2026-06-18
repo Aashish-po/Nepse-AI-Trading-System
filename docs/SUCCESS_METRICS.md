@@ -26,5 +26,13 @@ These targets are research gates, not profit guarantees.
 ## Engineering Metrics
 
 - API, database, ingestion foundation, features foundation, and dashboard can run locally.
-- Test suite passes.
-- `/health` endpoint returns status `ok`.
+- Lint passes: `python -m ruff check backend/`.
+- Test suite passes: `python -m pytest backend/tests/ -v`.
+- Health endpoints respond: `/health` returns status `ok`, with `/health/live` and
+  `/health/ready` for liveness/readiness and Prometheus metrics at `/metrics`.
+- Streamlit dashboard (`dashboard/app.py`) launches and reaches the backend.
+- Database migrations apply cleanly (Alembic revisions `0001`–`0011`).
+- Data-quality gate enforces hard blocks on unsafe data and soft weighting on warning data.
+
+These engineering metrics gate development quality; the research metrics above are
+research gates, not profit guarantees.

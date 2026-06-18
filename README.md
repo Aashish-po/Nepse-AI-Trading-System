@@ -1,3 +1,4 @@
+
 # NEPSE AI Trading Research Platform
 
 Private research and decision-support platform for NEPSE market data, quantitative research, data quality assurance, realistic backtesting, and signal exploration.
@@ -39,242 +40,124 @@ All outputs are advisory-only and require human review.
 
 ## Implementation Roadmap
 
+All 15 phases (0–14) are implemented in code and covered by tests. The phase
+numbering below matches `Documents/6_IMPLEMENTATION_PLAN.md` and the phase-gated
+test suite (e.g. `test_phase8_gate.py`, `test_phase10_integration.py`,
+`test_phase14_experimental.py`).
+
 | Phase | Focus Area             | Key Deliverables                                           |
 | ----- | ---------------------- | ---------------------------------------------------------- |
-| 0     | Foundation             | Project structure, env config, CI, health endpoint         |
-| 1     | Data Ingestion         | Scrapers/API clients, raw landing, validation rules        |
-| 2     | Database               | PostgreSQL schema, indexes, TimescaleDB setup              |
-| 3     | Feature Engineering    | Technical indicators, feature store, feature validation    |
-| 4     | Authentication         | User auth, RBAC, JWT handling                              |
-| 5     | Backtesting Engine     | Historical simulation, metrics, scenario testing           |
-| 6     | Research Workflow and Dashboard | Streamlit dashboard upgrade, research notebook workflow, validation |
+| 0     | Foundation             | Project structure, env config, CI, `/health` endpoint      |
+| 1     | Backend & Database     | FastAPI skeleton, SQLAlchemy ORM, Alembic migrations, JWT auth/RBAC, symbol seeding |
+| 2     | Data Ingestion & Quality | Ingestion service, validation rules, ingestion logs, trust scoring, data-quality gate, alerting |
+| 3     | Feature Engineering    | Technical indicators (RSI/SMA/EMA/MACD/ATR), returns/volatility, feature store, point-in-time safety |
+| 4     | Data Quality & Reliability | Trust model, daily reports, quality alerts, system modes (NORMAL/DEGRADED/SAFE_MODE) |
+| 5     | Strategy & Backtesting | Strategy registry, realistic backtesting (fees/slippage/liquidity/partial fills), benchmark comparison |
+| 6     | Research Workflow & Dashboard | Streamlit dashboard, notebook workflow, export validation, analytics & alerts pages |
 | 7     | Baseline ML            | Logistic regression, random forest, XGBoost, walk-forward training, promotion gates, model registry API |
-| 8     | LSTM & Sentiment       | LSTM for next-day return forecasting, XLM-R sentiment on news, combine with Phase 7 models |
-| 9     | Signal Fusion & Risk Management | Signal fusion engine, risk manager, fusion API endpoints, provider quota tracking |
-| 10    | Portfolio Optimization | Account simulation with initial capital, cash/positions, transaction logs, allocation methods: equal weight, risk parity, mean-variance, constraints |
-| 11    | Explainability (SHAP)  | SHAP, feature importance, attribution, trade explanations, governance: versioning and approvals before production-ready marking |
-| 12    | Meta-Learning & MLOps  | Auto-retraining, model selection, hyperparameter evolution |
-| 13    | Dashboard & Alerts     | Market overview, signal explorer, portfolio analytics      |
-| 14    | Production Deployment  | Docker / Kubernetes, CI/CD, monitoring, backups            |
+| 8     | LSTM & Sentiment       | LSTM next-day return forecasting, XLM-R/lexicon sentiment, NEPSE market calendar |
+| 9     | Signal Fusion & Risk   | Signal fusion engine, risk manager, position sizing, provider quota tracking (advisory; `enforced: false`) |
+| 10    | Portfolio Optimization | In-memory account simulation, allocation methods (equal weight, risk parity, mean-variance, constraints) |
+| 11    | Explainability (SHAP)  | Feature importance, local attribution, trade explanations, model governance/approval workflow |
+| 12    | MLOps / Monitoring / Retraining | Model selection, auto-retraining policy, hyperparameter evolution, drift monitoring |
+| 13    | Production Hardening & Deployment | Multi-stage Docker images, Compose, Kubernetes manifests, CI/CD, Prometheus monitoring, DB backups |
+| 14    | Experimental AI        | PPO, DQN, GNN, ensembles, meta-learning (experimental research modules, not live trading) |
 
-Advanced AI (ensemble models, meta-learning), high-frequency workflows, and Kubernetes-scale orchestration are deferred until the MVP proves data quality and backtesting reliability.
+The Phase 14 RL/GNN modules are experimental research code. Live broker execution
+and autonomous trading remain out of scope (deferred) until data-quality and
+backtesting reliability are proven in production research use.
 
 ## Current Project Structure
 
 ```text
 .
-├── .streamlit/
-│   └── secrets.toml                         # Streamlit secrets for dashboard auth
-├── .vscode/
-│   └── settings.json                        # VS Code workspace settings
-├── .gitignore
-├── TODO.md
-├── TODO_PHASE_6.md
-├── AGENTS.md
+├── .github/workflows/                       # CI (ci.yml), image publish (docker-publish.yml), Pages
+├── .streamlit/                              # Streamlit config (local)
+├── .vscode/                                 # VS Code workspace settings
+├── AGENTS.md                                # Common dev commands
 ├── README.md
-├── pyproject.toml
-├── uv.lock
-├── nepse_ai.db                              # Development SQLite database
+├── pyproject.toml                           # Project + ruff config
+├── uv.lock                                  # uv lockfile
 ├── requirements.txt
 ├── requirements-dev.txt
 ├── alembic.ini
+├── pytest.ini
+├── .pre-commit-config.yaml
 ├── Nepse AI Trading System.code-workspace
 │
 ├── backend/
 │   ├── __init__.py
 │   └── app/
-│       ├── __init__.py
 │       ├── main.py                          # FastAPI application entry point
-│       ├── core/
-│       │   ├── __init__.py
-│       │   ├── config.py                    # Application configuration
-│       │   ├── logging.py                   # Logging configuration
-│       │   └── security.py                  # Security utilities
-│       ├── api/
-│       │   ├── __init__.py
-│       │   └── routes/
-│       │       ├── __init__.py
-│       │       ├── auth.py                  # Authentication endpoints
-│       │       ├── health.py                # Health check endpoint
-│       │       ├── market.py                # Market data endpoints
-│       │       ├── features.py              # Feature generation endpoints
-│       │       ├── data_quality.py          # Data quality endpoints
-│       │       ├── strategies.py            # Strategy endpoints
-│       │       ├── ml.py                    # ML model endpoints
-│       │       └── signals.py               # Signal tracking endpoints
-│       ├── models/                          # SQLAlchemy ORM models
-│       │   ├── __init__.py
-│       │   ├── stock.py                     # Stock / symbol metadata
-│       │   ├── price.py                     # Price data
-│       │   ├── feature.py                   # Computed features
-│       │   ├── data_quality.py              # Trust scores, alerts, reports, calendar, events
-│       │   ├── data_source.py               # Data sources and ingestion logs
-│       │   ├── strategy.py                  # Strategy registry
-│       │   ├── signal.py                    # Trade signals
-│       │   ├── backtest.py                  # Backtest results
-│       │   ├── portfolio_snapshot.py         # Portfolio snapshots
-│       │   ├── dataset.py                   # Datasets
-│       │   ├── model_registry.py            # ML models
-│       │   ├── trade.py                     # Trade logs
-│       │   ├── user.py                      # Users and RBAC
-│       │   ├── benchmark.py                 # Benchmark data
-│       │   ├── drift_event.py               # Drift detection events
-│       │   ├── telegram.py                  # Telegram alert config
-│       │   ├── types.py                     # SQLAlchemy custom types
-│       │   └── ...
-│       ├── schemas/                         # Pydantic schemas
-│       │   ├── __init__.py
-│       │   ├── auth.py
-│       │   ├── market.py
-│       │   ├── feature.py
-│       │   ├── ingestion.py
-│       │   ├── strategy.py
-│       │   └── data_quality.py
-│       ├── services/                        # Business logic layer
-│       │   ├── __init__.py
-│       │   ├── auth.py                      # Authentication service
-│       │   ├── market.py                    # Market data service
-│       │   ├── ingestion.py                 # Data ingestion service
-│       │   ├── feature.py                   # Feature computation service
-│       │   ├── data_quality.py              # Trust scoring, system mode, source accuracy, drift
-│       │   ├── data_quality_gate.py          # Data quality gating for features and backtesting
-│       │   ├── backtest.py                  # Backtest execution with data quality enforcement
-│       │   ├── benchmark.py                 # Benchmark comparison, alpha/beta calculation
-│       │   ├── strategy.py                  # Strategy evaluation service
-│       │   ├── mlflow_tracking.py           # MLflow training orchestration
-│       │   ├── telegram_alerter.py          # Telegram alert sending service
-│       │   └── signal_backfill.py           # Historical signal completion service
-│       └── db/
-│           ├── __init__.py
-│           ├── session.py                   # Database session factory
-│           ├── base.py                      # Declarative base
-│           ├── models/                      # SQLAlchemy models (db-local copies)
-│           │   ├── __init__.py
-│           │   ├── stock.py
-│           │   ├── price.py
-│           │   ├── feature.py
-│           │   ├── data_quality.py
-│           │   ├── data_source.py
-│           │   ├── strategy.py
-│           │   ├── signal.py
-│           │   ├── backtest.py
-│           │   ├── portfolio_snapshot.py
-│           │   ├── dataset.py
-│           │   ├── model_registry.py
-│           │   ├── trade.py
-│           │   ├── benchmark.py
-│           │   ├── drift_event.py
-│           │   ├── user.py
-│           │   └── types.py
-│           └── migrations/
-│               ├── __init__.py
-│               ├── env.py                   # Alembic environment config
-│               └── versions/
-│                   ├── 0001_initial_schema.py
-│                   ├── 0002_add_data_sources_and_ingestion_logs.py
-│                   ├── 0003_update_ingestion_logs_add_source_id_and_duration.py
-│                   ├── 0004_add_data_quality_tables.py
-│                   ├── 0005_add_trust_score_to_features.py
-│                   ├── 0006_add_trust_version_and_event_features.py
-│                   ├── 0007_add_benchmark_and_trade_fields.py
-│                   └── 0008_add_signal_tracking_and_telegram_alerts.py
+│       ├── core/                            # config.py, logging.py, security.py, dependencies.py
+│       ├── api/routes/                       # auth, health, market, features, data_quality,
+│       │                                     #   strategies, signals, ml, lstm, lstm_route,
+│       │                                     #   portfolio, explainability, mlops, analytics
+│       ├── models/                          # SQLAlchemy ORM models (stock, price, feature,
+│       │                                     #   data_quality, data_source, strategy, signal,
+│       │                                     #   backtest, portfolio_snapshot, dataset,
+│       │                                     #   model_registry, trade, user, benchmark,
+│       │                                     #   drift_event, telegram, quota, NEPSEINDEX, types)
+│       ├── schemas/                         # auth, market, feature, ingestion, strategy,
+│       │                                     #   data_quality, signals, portfolio, explainability
+│       ├── services/                        # auth, market, ingestion, feature, data_quality,
+│       │                                     #   data_quality_gate, backtest, benchmark, strategy,
+│       │                                     #   mlflow_tracking, telegram_alerter, signal_backfill,
+│       │                                     #   signal_fusion, risk_manager, portfolio_account,
+│       │                                     #   portfolio_optimization, model_governance, mlops,
+│       │                                     #   monitoring, analytics, alerts, provider_quota,
+│       │                                     #   market_calendar
+│       ├── db/                              # session.py, base.py
+│       └── db/migrations/versions/           # Alembic revisions 0001 … 0011
 │
-├── ml/                                      # ML pipelines and utilities
-│   ├── __init__.py
-│   ├── training.py                          # Model training orchestration
-│   ├── inference.py                         # Model inference utilities
-│   ├── prediction.py                         # Prediction generation
-│   ├── evaluation.py                        # Model evaluation metrics
-│   ├── dataset.py                           # Dataset builders/loaders
-│   ├── feature_vector.py                    # Feature vector construction
-│   ├── labeling.py                          # Label generation for supervised learning
-│   ├── drift_monitoring.py                  # Data drift detection
-│   ├── risk_manager.py                      # Risk-aware model outputs
-│   ├── position_sizing.py                   # Position sizing logic
-│   └── experiment_tracking.py               # MLflow experiment helpers
+├── ml/                                      # ML / research modules
+│   ├── training.py, inference.py, predictions.py, evaluation.py, dataset.py
+│   ├── feature_vector.py, labeling.py, drift_monitoring.py, model_io.py
+│   ├── risk_manager.py, position_sizing.py, signal_fusion.py, experiment_tracking.py
+│   ├── lstm.py, sentiment.py, ensemble.py, explainability.py, meta_learning.py
+│   └── ppo.py, dqn.py, gnn.py               # Phase 14 experimental RL/GNN
 │
 ├── strategies/                              # Strategy definitions and experiments
-│   └── __init__.py
+├── backtesting/                             # Backtesting helpers
+├── features/                                # Feature helpers
 │
-├── data/                                    # Data layer (raw, ingestion, validation)
-│   ├── __init__.py
-│   ├── loaders/__init__.py                  # DataLoader utilities
-│   ├── ingestion/__init__.py                # Ingestion adapters/scrapers
-│   ├── validation/__init__.py              # Validation rules and checksum verification
-│   └── raw/
-│       └── .gitkeep                         # Placeholder for raw input files
+├── data/                                    # Data layer
+│   ├── loaders/, ingestion/, validation/
+│   └── raw/.gitkeep                         # Placeholder for raw input files
 │
 ├── scripts/
-│   └── seed_symbols.py                      # Seed NEPSE symbols into database
+│   ├── seed_symbols.py                      # Seed NEPSE symbols into database
+│   ├── smoke_test.py                        # Manual smoke verification
+│   └── backup_db.sh                         # pg_dump backup + retention
 │
-├── dashboard/                               # Streamlit dashboard
-│   ├── __init__.py
+├── dashboard/                               # Streamlit dashboard (single app, 12 pages)
 │   ├── app.py                               # Main Streamlit application
-│   ├── dashboard_complete.py                # Complete dashboard module
-│   ├── feature_guide.md
-│   ├── README.md
+│   ├── README.md, feature_guide.md
 │   ├── requirements-dashboard.txt
-│   ├── .streamlit/
-│   │   ├── config.toml                      # Streamlit server configuration
-│   │   └── secrets.toml                     # Streamlit secrets
-│   └── venv/                                # Dashboard local virtual environment
+│   ├── setup.sh, setup.bat
+│   └── .streamlit/config.toml
 │
-├── docs/
-│   ├── ARCHITECTURE.md
-│   ├── PHASES.md
-│   ├── PHASE6_REPORT.md
-│   ├── SUCCESS_METRICS.md
-│   ├── data_quality_gate_spec.md
-│   └── RISK_DISCLAIMER.md
+├── docs/                                    # Reference specs
+│   ├── ARCHITECTURE.md, PHASES.md, SUCCESS_METRICS.md
+│   ├── data_quality_gate_spec.md, RISK_DISCLAIMER.md
 │
-├── Documents/                               # Project documentation and planning
-│   ├── 0_INDEX.md
-│   ├── 00_QUICK_REFERENCE.md
-│   ├── 1_PRD.md
-│   ├── 2_TRD.md
-│   ├── 3_APP_FLOW.md
-│   ├── 4_UI_UX_BRIEF.md
-│   ├── 5_BACKEND_SCHEMA.md
-│   ├── 6_IMPLEMENTATION_PLAN.md
-│   ├── 7_Security.md
-│   ├── NEPSE_AI_Trading_Research_Platform_Integrated.md
-│   ├── PLAN.md
-│   └── phase.md
+├── Documents/                               # Methodology / planning docs (git-ignored)
+│   ├── 0_INDEX.md, 00_QUICK_REFERENCE.md
+│   └── 1_PRD.md … 7_Security.md (incl. 6_IMPLEMENTATION_PLAN.md)
 │
 ├── infra/                                   # Infrastructure / deployment
-│   ├── docker-compose.yml                   # Multi-service Docker Compose
-│   └── docker/
-│       ├── api.Dockerfile                   # Backend API Dockerfile
-│       └── dashboard.Dockerfile             # Dashboard Dockerfile
+│   ├── docker-compose.yml, README.md
+│   ├── docker/api.Dockerfile, docker/dashboard.Dockerfile
+│   └── k8s/                                 # namespace, configmap, api/dashboard deployments, backup-cronjob
 │
-├── models/
-│   ├── logistic_v1.0.0.joblib              # Production-trained LSTM model artifact
-│   └── logistic_vtest.2.0.joblib           # Latest test model artifact
+├── models/                                  # Trained model artifacts *.joblib (gitignored)
 │
-├── research/
-│   └── notebooks/
-│       ├── README.md
-│       ├── 01_idea_to_backtest.ipynb        # Notebook: concept to backtest
-│       ├── 02_backtest_and_export.ipynb     # Notebook: backtest execution and export
-│       └── 03_integrate_bundle.ipynb        # Notebook: integrate bundle
+├── research/notebooks/                      # 01_idea_to_backtest, 02_backtest_and_export,
+│   │                                         #   03_integrate_bundle + README.md
 │
-├── .ruff_cache/                             # Ruff cache (generated)
-│
-└── backend/tests/                           # pytest test suite
-    ├── conftest.py                          # Test fixtures and config
-    ├── test_health.py                       # Health endpoint tests
-    ├── test_auth.py                         # Authentication tests
-    ├── test_market.py                       # Market data tests
-    ├── test_ingestion.py                    # Ingestion tests
-    ├── test_feature.py                      # Feature computation tests
-    ├── test_data_quality.py                 # Data quality endpoint tests
-    ├── test_data_quality_gate.py            # Data quality gating tests
-    ├── test_strategy_backtest.py            # Strategy and backtest tests
-    ├── test_ml.py                           # ML pipeline tests
-    ├── test_mlflow_tracking.py              # MLflow tracking tests
-    ├── test_signal_backfill.py              # Signal backfill tests
-    ├── test_telegram_alerter.py             # Telegram alerter tests
-    └── __pycache__/                         # Python test cache (generated)
+└── backend/tests/                           # pytest suite (incl. phase gates:
+                                             #   test_phase6_validation, test_phase8_gate,
+                                             #   test_phase10_integration, test_phase14_experimental)
 ```
 
 ## API Endpoints (Current)
@@ -282,6 +165,9 @@ Advanced AI (ensemble models, meta-learning), high-frequency workflows, and Kube
 | Method | Endpoint                                     | Description                                                 |
 | ------ | -------------------------------------------- | ----------------------------------------------------------- |
 | GET    | /health                                      | Health check (status, environment, version, scope)          |
+| GET    | /health/live                                 | Liveness probe (process up)                                 |
+| GET    | /health/ready                                | Readiness probe (database reachable)                        |
+| GET    | /metrics                                     | Prometheus metrics (request counts, latency histogram)      |
 | POST   | /auth/register                               | Register a new user                                         |
 | POST   | /auth/login                                  | Login and receive access token                              |
 | GET    | /market/prices                               | List price data with optional symbol filter                 |
@@ -315,6 +201,24 @@ Advanced AI (ensemble models, meta-learning), high-frequency workflows, and Kube
 | POST   | /ml/train                                  | Train an ML model                                           |
 | GET    | /ml/models                                 | List trained models                                         |
 | GET    | /ml/predict/{symbol}                       | Get model prediction for a symbol                           |
+| POST   | /portfolio/account                         | Create/reset a portfolio account                            |
+| GET    | /portfolio/account/snapshot                | Portfolio snapshot (equity, cash, positions)                |
+| POST   | /portfolio/optimize                        | Optimize allocation (equal/risk-parity/mean-variance)       |
+| GET    | /explain/models/{model_id}/importance      | Global feature importance (SHAP + fallbacks)                |
+| POST   | /explain/models/{model_id}/predict         | Local attribution + trade explanation                       |
+| GET    | /governance/models                         | List models by governance state                             |
+| POST   | /governance/models/{model_id}/submit       | Submit a model for approval                                 |
+| POST   | /governance/models/{model_id}/approve      | Approve a model                                             |
+| POST   | /governance/models/{model_id}/production   | Mark an approved model production-ready                     |
+| GET    | /mlops/champion                             | Select best model by metric                                 |
+| GET    | /mlops/rank                                 | Rank registered models by metric                            |
+| GET    | /mlops/models/{model_id}/retrain-assessment| Assess whether a model needs retraining                     |
+| POST   | /mlops/retrain                             | Trigger a retraining run                                    |
+| POST   | /mlops/evolve                              | Evolutionary hyperparameter search                          |
+| GET    | /analytics/market-overview                 | Market overview with top gainers/losers                     |
+| GET    | /analytics/signals                         | Signal explorer with filters and summary                    |
+| POST   | /analytics/portfolio                       | Portfolio analytics from an equity curve                    |
+| POST   | /alerts/evaluate                           | Evaluate rule-based alerts                                  |
 
 ## Local Setup
 
@@ -369,9 +273,9 @@ Use `research/notebooks/` for exploratory analysis. All experimental results mus
 
 ## Current Phase Status
 
-**Phase 0-9 Implementation Complete**: Foundation, database, data quality, features, backtesting engine, dashboard, and export workflow (Phases 0-6); baseline ML (Phase 7); LSTM forecasting, multilingual XLM-R/lexicon sentiment, and the NEPSE market calendar (Phase 8); and signal fusion with risk management (Phase 9) are implemented.
+**Phase 0-14 Implementation Complete**: Foundation, backend & database, data ingestion & quality, features, data-quality reliability, strategy & backtesting, and the research workflow/dashboard (Phases 0-6); baseline ML (Phase 7); LSTM forecasting, multilingual XLM-R/lexicon sentiment, and the NEPSE market calendar (Phase 8); signal fusion with risk management (Phase 9, advisory — `enforced: false`); portfolio optimization (Phase 10, in-memory account state); explainability (SHAP) with model governance (Phase 11); MLOps — meta-learning, retraining policy, drift monitoring (Phase 12); production hardening & deployment with Docker/Kubernetes, CI/CD, monitoring, and backups (Phase 13); and experimental AI — PPO/DQN/GNN, ensembles, meta-learning (Phase 14, experimental research only) are implemented.
 
-**Validation**: The full test suite passes (`pytest backend/tests/`), including the Phase 6 validation gate (`test_phase6_validation.py`) and the Phase 8 gate (`test_phase8_gate.py`).
+**Validation**: The full test suite passes (`python -m pytest backend/tests/ -v`), including phase gates `test_phase6_validation.py`, `test_phase8_gate.py`, `test_phase10_integration.py`, and `test_phase14_experimental.py`. Lint is clean (`python -m ruff check backend/`).
 
 ### Completed Features
 
@@ -383,9 +287,9 @@ Use `research/notebooks/` for exploratory analysis. All experimental results mus
 - Technical indicators (RSI, SMA, EMA, MACD, ATR, returns)
 - Transaction cost and fill rate modeling
 - Portfolio-level constraints (max positions, cash reserves)
-- Dashboard with 8 pages (Market Overview, Strategies, Backtesting, Signals, Features, Data Sources, Alerts, System Status)
+- Dashboard with 12 pages (Market Overview, Strategies, Backtesting, Signals, Features, Data Sources, Alerts, System Status, ML Models, Analytics, MLOps, Explainability)
 - Export workflow (JSON/CSV backtest reports, equity curves, trade logs)
-- Safe mode integration (Phase 2b → Phase 6)
+- Safe mode integration (data-quality gating across features and backtests)
 
 ### Backtesting Realism
 
