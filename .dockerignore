@@ -1,0 +1,43 @@
+# Virtual environments
+.venv/
+venv/
+dashboard/venv/
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Version control & CI
+.git/
+.github/
+
+# Local databases & data artifacts
+*.db
+*.sqlite
+*.sqlite3
+mlruns/
+exports/
+data/raw/*
+
+# Secrets & local env
+.env
+.streamlit/secrets.toml
+dashboard/.streamlit/secrets.toml
+
+# IDE / editor
+.vscode/
+.idea/
+*.code-workspace
+
+# Docs & notebooks (not needed at runtime)
+docs/
+Documents/
+research/
+*.md
+
+# Backups
+backups/
