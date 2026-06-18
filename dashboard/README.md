@@ -1,6 +1,20 @@
 # NEPSE AI Trading Dashboard
 
-A professional-grade Streamlit dashboard for the NEPSE AI Trading System with market overview, strategy management, backtesting, and data quality monitoring.
+A professional-grade Streamlit dashboard for the NEPSE AI Trading System. The app
+(`dashboard/app.py`) ships 12 pages:
+
+- Market Overview
+- Strategies
+- Backtesting
+- Signals
+- Features
+- Data Sources
+- Alerts
+- System Status
+- ML Models
+- Analytics
+- MLOps
+- Explainability
 
 ## 🎯 Features
 
@@ -70,16 +84,8 @@ venv\Scripts\activate
 # Activate (macOS/Linux)
 source venv/bin/activate
 
-# Install dependencies
-pip install streamlit \
-            streamlit-option-menu \
-            pandas \
-            plotly \
-            altair \
-            requests
-
-# Or install from requirements.txt (if available)
-pip install -r requirements.txt
+# Install dependencies (run from the repo root)
+pip install -r dashboard/requirements-dashboard.txt
 ```
 
 ### Configuration
@@ -100,13 +106,11 @@ export API_BASE="http://localhost:8000"
 ## 🚀 Running the Dashboard
 
 ```bash
-# Start the backend first
-cd ../backend
-python -m uvicorn app.main:app --reload
+# Start the backend first, from the repo root
+uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --app-dir .
 
-# In another terminal, start the dashboard
-cd ../dashboard
-streamlit run dashboard_complete.py
+# In another terminal, start the dashboard from the repo root
+streamlit run dashboard/app.py
 ```
 
 The dashboard will be available at `http://localhost:8501`
@@ -191,7 +195,10 @@ Header: 🧪 Backtest & Analysis
 
 ## 🔧 API Integration
 
-The dashboard expects the backend to provide these endpoints:
+Across its 12 pages the dashboard consumes the backend routers: `market`,
+`data-quality`, `features`, `signals`, `strategies`, `portfolio`, `analytics`,
+`alerts`, `mlops`, `explainability`/governance, and `health`. Core endpoints used
+by the primary pages:
 
 ### Market Data
 
@@ -277,10 +284,10 @@ Use `st.cache_data.clear()` to force refresh if needed.
 ⚠️ Backend not running or failed to connect (GET /strategies/).
 ```
 
-**Solution**: Start the backend before the dashboard:
+**Solution**: Start the backend before the dashboard (from the repo root):
 
 ```bash
-python -m uvicorn app.main:app --reload
+uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --app-dir .
 ```
 
 ### API_BASE Not Set
