@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nepse-ai-dashboard
+  namespace: nepse-ai
+  labels:
+    app: nepse-ai-dashboard
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nepse-ai-dashboard
+  template:
+    metadata:
+      labels:
+        app: nepse-ai-dashboard
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+      containers:
+        - name: dashboard
+          image: ghcr.io/aashish-po/nepse-ai-dashboard:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8501
+          env:
+            - name: API_BASE
+              value: "http://nepse-ai-api"
+          livenessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: 8501
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: 8501
+            initialDelaySeconds: 15
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nepse-ai-dashboard
+  namespace: nepse-ai
+spec:
+  selector:
+    app: nepse-ai-dashboard
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8501
+  type: ClusterIP

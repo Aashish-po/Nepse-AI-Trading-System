@@ -1,0 +1,54 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: nepse-ai-db-backup
+  namespace: nepse-ai
+spec:
+  # Daily at 18:15 UTC (00:00 Nepal time, after market close).
+  schedule: "15 18 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 7
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: pg-backup
+              image: postgres:16
+              envFrom:
+                - secretRef:
+                    name: nepse-ai-secrets
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -euo pipefail
+                  TS=$(date +%Y%m%d_%H%M%S)
+                  echo "Starting backup at ${TS}"
+                  pg_dump "${DATABASE_URL}" --format=custom \
+                    --file="/backups/nepse_ai_${TS}.dump"
+                  echo "Backup complete: nepse_ai_${TS}.dump"
+                  # Retain only the 14 most recent dumps.
+                  ls -1t /backups/nepse_ai_*.dump | tail -n +15 | xargs -r rm -f
+              volumeMounts:
+                - name: backup-storage
+                  mountPath: /backups
+          volumes:
+            - name: backup-storage
+              persistentVolumeClaim:
+                claimName: nepse-ai-backups
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nepse-ai-backups
+  namespace: nepse-ai
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi

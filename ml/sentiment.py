@@ -26,6 +26,8 @@ from __future__ import annotations
 import logging
 import re
 from dataclasses import dataclass
+from datetime import date
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -375,3 +377,77 @@ class SentimentAnalyzer:
             "score": score,
             "provider": "sentiment",
         }
+
+
+class SymbolSentimentFetcher:
+    """Fetch and score news sentiment for a specific symbol on a given date."""
+
+    # Mapping of symbols to common news source keywords
+    SYMBOL_KEYWORDS: dict[str, list[str]] = {
+        "NABIL": ["nabil", "nabil bank", "nbl"],
+        "SCB": ["standard chartered", "scb nepal"],
+        "NTC": ["nepal telecom", "ntc", "nepal tele"],
+        "NEPSE": ["nepse", "nepal stock exchange", "stock market"],
+    }
+
+    def __init__(self, backend: str = "auto") -> None:
+        self._analyzer = SentimentAnalyzer(backend=backend)
+
+    def compute(self, symbol: str, date_obj: date | None = None) -> dict[str, Any]:
+        """
+        Compute sentiment score for a symbol.
+
+        Args:
+            symbol: Stock symbol to analyze
+            date_obj: Date to analyze (currently fetches recent news)
+
+        Returns:
+            {"sentiment": "bullish/bearish/neutral", "score": 0-1, "confidence": 0-1}
+        """
+        # Get keywords for this symbol
+        keywords = self.SYMBOL_KEYWORDS.get(symbol.upper(), [symbol.lower()])
+
+        # For now, use existing sentiment analyzer on mock data
+        # In production, this would fetch real news from sharesansar.com, etc.
+        mock_headlines = self._fetch_news_headlines(symbol, keywords, date_obj)
+
+        if not mock_headlines:
+            return {"sentiment": "neutral", "score": 0.5, "confidence": 0.0}
+
+        # Aggregate sentiment across headlines
+        return self._analyzer.aggregate(mock_headlines)
+
+    def _fetch_news_headlines(
+        self, symbol: str, keywords: list[str], date_obj: date | None = None
+    ) -> list[str]:
+        """
+        Fetch news headlines for the symbol.
+
+        Currently returns placeholder headlines. In production, implement:
+        - Scrapes sharesansar.com news archive
+        - Filters by symbol keywords
+        - Returns headlines from the last 7 days
+        """
+        # Placeholder: In production, implement actual news scraping
+        # Example: requests.get(f"https://www.sharesansar.com/category/news")
+        # Then parse and filter by keywords
+        return []
+
+
+def sentiment_score_to_signal(score: float, confidence: float) -> dict[str, Any]:
+    """Convert sentiment score to fusion-compatible signal format.
+
+    Maps -1 (bearish) to 0..1 bullish score used by SignalFusionEngine.
+    """
+    # score is already 0-1 from SentimentAnalyzer
+    if score >= 0.6:
+        signal = "BUY"
+        conf = confidence
+    elif score <= 0.4:
+        signal = "SELL"
+        conf = confidence
+    else:
+        signal = "HOLD"
+        conf = 0.5
+
+    return {"signal": signal, "confidence": conf, "score": score, "provider": "sentiment"}

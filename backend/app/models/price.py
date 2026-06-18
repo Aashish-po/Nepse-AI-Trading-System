@@ -2,8 +2,7 @@ import datetime
 from decimal import Decimal
 
 from app.db.base import Base
-from app.models.types import big_int_pk_type
-from sqlalchemy import Date, ForeignKey, Index, Numeric, UniqueConstraint, desc
+from sqlalchemy import Date, ForeignKey, Numeric, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 
@@ -11,10 +10,10 @@ class Price(Base):
     __tablename__ = "prices"
     __table_args__ = (
         UniqueConstraint("stock_id", "date", name="uq_prices_stock_id_date"),
-        Index("ix_prices_stock_id_date_desc", "stock_id", desc("date")),
+        {"extend_existing": True},
     )
 
-    id: Mapped[int] = mapped_column(big_int_pk_type, primary_key=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
     stock_id: Mapped[int] = mapped_column(ForeignKey("stocks.id"), nullable=False)
     date: Mapped[datetime.date] = mapped_column(Date, index=True, nullable=False)
     open: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=True)

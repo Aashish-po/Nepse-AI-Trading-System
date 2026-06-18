@@ -1,4 +1,5 @@
 # Environment and secrets
+
 .env
 .env.*
 !.env.example
@@ -8,16 +9,17 @@ secrets/
 dashboard/.streamlit/secrets.toml
 !dashboard/.streamlit/config.toml
 
-
-
 # Python virtual environments
+
 .venv/
 venv/
 env/
 ENV/
+.vam/
 .claude/
 
 # Python caches and compiled files
+
 __pycache__/
 *.py[cod]
 *$py.class
@@ -28,6 +30,7 @@ __pycache__/
 htmlcov/
 
 # Build and packaging artifacts
+
 build/
 dist/
 *.egg-info/
@@ -37,6 +40,7 @@ pip-wheel-metadata/
 .pyinstaller/
 
 # Local databases and runtime files
+
 *.db
 *.sqlite
 *.sqlite3
@@ -44,8 +48,8 @@ pip-wheel-metadata/
 *.pid
 .pytest_cache/
 
-
 # Data and generated research outputs
+# Keep raw .gitkeep for git tracking
 data/raw/*
 !data/raw/.gitkeep
 data/processed/
@@ -53,14 +57,16 @@ data/reports/
 artifacts/
 reports/
 exports/
-docs/
-
+dashboard/exports/
 
 # ML and experiment tracking outputs
+
 mlruns/
 checkpoints/
 tensorboard/
+
 # Ignore trained ML model binaries (place in top-level models/ directory for local development)
+
 *.pkl
 *.h5
 *.onnx
@@ -69,17 +75,19 @@ tensorboard/
 .model/
 
 # Notebook checkpoints
+
 .ipynb_checkpoints/
 research/notebooks/.ipynb_checkpoints/
 
 # Docker and local infrastructure state
+
 docker-compose.override.yml
 infra/docker-compose.override.yml
 postgres_data/
 redis_data/
 
-
 # IDE and OS noise
+
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
@@ -91,10 +99,13 @@ Thumbs.db
 .kilonix/projects/.gitignore
 .kilonix/registry/.gitignore
 .kilonix/registry/registry.db
-.kilo/plans/
-
+.kilonix/registry/registry.db-journal
+.kilonix/registry/registry.db-shm
+.kilonix/registry/registry.db-wal
+.kilonix/registry/registry.db-shm
 
 # Ignore personal notes
+
 plan.md
 notes.md
 NEPSE_AI_Trading_Research_Platform_Integrated.md
@@ -111,10 +122,3 @@ agenda.md
 Architecture.md
 AGENTS.md
 Documents/
-
-
-
-
-
-
-
