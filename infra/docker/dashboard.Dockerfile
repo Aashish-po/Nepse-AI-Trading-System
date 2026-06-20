@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Multi-stage build for the Streamlit dashboard.
 
-FROM python:3.11-slim AS builder
+FROM python:3.14-slim AS builder
 
 ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
@@ -16,7 +16,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
     && pip install --no-cache-dir streamlit==1.41.1 streamlit-option-menu==0.4.0
 
 
-FROM python:3.11-slim AS runtime
+FROM python:3.14-slim AS runtime
 
 RUN groupadd --system app && useradd --system --gid app --create-home app
 
