@@ -1,12 +1,15 @@
 name: Docker Publish
 
 # Build and publish container images to GitHub Container Registry once CI passes
-# on main, or when a version tag is pushed.
+# on main, or when a version tag is pushed. On pull requests the images are only
+# built (not pushed) so Dockerfile breakage is caught before it reaches main.
 
 on:
   push:
     branches: [main]
     tags: ["v*"]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -58,7 +61,7 @@ jobs:
         with:
           context: .
           file: ${{ matrix.dockerfile }}
-          push: true
+          push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
