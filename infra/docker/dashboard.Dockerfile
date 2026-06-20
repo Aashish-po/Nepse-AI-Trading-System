@@ -11,9 +11,8 @@ WORKDIR /app
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt \
-    && pip install --no-cache-dir streamlit==1.41.1 streamlit-option-menu==0.4.0
+COPY dashboard/requirements-dashboard.txt .
+RUN pip install --no-cache-dir -r requirements-dashboard.txt
 
 
 FROM python:3.12-slim AS runtime
