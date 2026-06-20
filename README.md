@@ -7,7 +7,7 @@
 [![CI](https://github.com/Aashish-po/Nepse-AI-Trading-System/actions/workflows/ci.yml/badge.svg)](https://github.com/Aashish-po/Nepse-AI-Trading-System/actions/workflows/ci.yml)
 [![Docker Publish](https://github.com/Aashish-po/Nepse-AI-Trading-System/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/Aashish-po/Nepse-AI-Trading-System/actions/workflows/docker-publish.yml)
 [![Dependencies](https://img.shields.io/librariesio/github/Aashish-po/Nepse-AI-Trading-System)](https://github.com/Aashish-po/Nepse-AI-Trading-System/network/dependencies)
-[![Python](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/downloads/)
+[![Python](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-261230.svg)](https://github.com/astral-sh/ruff)
 [![Version](https://img.shields.io/badge/version-1.0%20(MVP)-success.svg)](#-implementation-roadmap)
 [![License](https://img.shields.io/badge/license-Proprietary-lightgrey.svg)](#-license)
@@ -95,7 +95,7 @@ The system is organized into three layers:
 
 | Layer | Technologies |
 | --- | --- |
-| **Backend & API** | Python 3.11, FastAPI, Uvicorn, Pydantic v2 |
+| **Backend & API** | Python 3.12, FastAPI, Uvicorn, Pydantic v2 |
 | **Database & ORM** | PostgreSQL 13+ (TimescaleDB optional), SQLAlchemy 2.0, Alembic |
 | **Cache & Queue** | Redis |
 | **ML & Tracking** | scikit-learn, XGBoost, PyTorch (LSTM/RL), MLflow, NumPy/Pandas |
@@ -109,7 +109,7 @@ The system is organized into three layers:
 
 ### Prerequisites
 
-- **Python 3.11**
+- **Python 3.12**
 - **PostgreSQL 13+** and **Redis** (or use [Docker Compose](#running-with-docker), which provisions both)
 - **Git**
 
