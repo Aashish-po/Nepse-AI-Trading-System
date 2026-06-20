@@ -4,5 +4,5 @@ requests==2.34.2
 streamlit-option-menu==0.3.12
 plotly>=5.17.0
 altair>=6.2.1
-python-dateutil>=2.8.2
+python-dateutil>=2.9.0.post0
 pytz>=2026.2
