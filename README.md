@@ -64,7 +64,7 @@ These are research/evaluation gates — **not** guarantees of trading profit.
 
 ## ✨ Key Features
 
-- **Multi-source data ingestion** — ShareSansar API with MeroLagani scraper and manual CSV fallbacks.
+- **Multi-source data ingestion** — ShareSansar, MeroLagani scraper with manual CSV fallbacks.
 - **Data-quality gating** — automated trust scoring (completeness, consistency, freshness, volume, cross-source) with `NORMAL` / `DEGRADED` / `SAFE_MODE` system states.
 - **Realistic backtesting** — fees (0.5%), slippage (5 bps), liquidity filters, partial fills, execution delay, stop-loss / take-profit / trailing-stop exits, and benchmark comparison.
 - **Explainable signal fusion** — combines technical, ML, and sentiment signals with calibrated confidence and feature attribution (SHAP).
