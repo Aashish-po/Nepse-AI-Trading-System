@@ -22,3 +22,13 @@ updates:
       - "/infra/docker"
     schedule:
       interval: "weekly"
+    ignore:
+      # Pin the Python base image to the 3.12 line. New Python minors
+      # (3.13/3.14/...) routinely ship before the scientific stack
+      # (pandas/numpy/scipy/xgboost) publishes matching wheels, which
+      # breaks the slim-image build (no compiler -> source builds fail).
+      # Bump this deliberately once wheels exist for the target version.
+      - dependency-name: "python"
+        update-types:
+          - "version-update:semver-major"
+          - "version-update:semver-minor"
