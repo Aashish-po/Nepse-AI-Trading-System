@@ -13,7 +13,7 @@ markers = [
 # -----------------------------------
 [tool.ruff]
 line-length = 100
-target-version = "py311"
+target-version = "py312"
 
 exclude = [
     ".git",
@@ -107,15 +107,15 @@ indent-style = "space"
 
 [tool.pylance]
 pythonPath = "backend"
-pythonVersion = "3.11"
+pythonVersion = "3.12"
 
 [tool.pyright]
 extraPaths = ["backend"]
-pythonVersion = "3.11"
+pythonVersion = "3.12"
 pythonPlatform = "Windows"
 
 [tool.mypy]
-python_version = "3.11"
+python_version = "3.12"
 mypy_path = "backend"
 ignore_missing_imports = true
 check_untyped_defs = true
