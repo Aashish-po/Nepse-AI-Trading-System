@@ -13,6 +13,11 @@ permissions:
   contents: read
   packages: write
 
+# Don't run overlapping publishes for the same ref; let the latest win.
+concurrency:
+  group: docker-publish-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
