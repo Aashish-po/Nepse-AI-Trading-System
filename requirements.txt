@@ -6,7 +6,7 @@ pydantic-settings==2.14.2
 python-dotenv==1.2.2
 SQLAlchemy==2.0.36
 alembic==1.18.4
-psycopg[binary]==3.2.13
+psycopg[binary]==3.3.4
 python-jose[cryptography]==3.5.0
 email-validator==2.3.0
 bcrypt==5.0.0
