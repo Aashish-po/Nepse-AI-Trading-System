@@ -325,3 +325,57 @@ def optimize_from_signals(
         symbols=symbols,
         constraints=constraints,
     )
+
+
+def aggregate_signals_to_weights(
+    fused_signals: list[dict[str, Any]],
+    max_weight: float = 0.2,
+    covariance_matrix: np.ndarray | None = None,
+) -> dict[str, float]:
+    """Aggregate fused signals into long-only portfolio weights.
+
+    Bridges the signal-fusion layer to portfolio construction (Priority 3.1):
+    only actionable BUY signals receive capital, sized by their confidence.
+
+    When a ``covariance_matrix`` is supplied, mean-variance optimization is used
+    (via :func:`optimize_from_signals`). Otherwise weights are confidence-
+    proportional, capped at ``max_weight`` and renormalized so they sum to 1.
+    Returns an empty dict when there are no actionable BUY signals.
+    """
+    buys = [s for s in fused_signals if str(s.get("signal", "")).upper() == "BUY"]
+    symbols = [str(s.get("symbol")) for s in buys if s.get("symbol")]
+    if not symbols:
+        return {}
+
+    if covariance_matrix is not None:
+        return optimize_from_signals(
+            buys, symbols, covariance_matrix, max_weight=max_weight
+        ).weights
+
+    raw = {
+        str(s["symbol"]): max(0.0, float(s.get("confidence", 0.0))) for s in buys if s.get("symbol")
+    }
+    total = sum(raw.values())
+    if total <= 0:
+        # No usable confidence: fall back to equal weight (still capped).
+        weights = {sym: 1.0 / len(symbols) for sym in symbols}
+    else:
+        weights = {sym: v / total for sym, v in raw.items()}
+
+    # Apply the per-position cap, then renormalize the remaining (uncapped) names
+    # so the book stays fully invested where possible.
+    for _ in range(len(weights)):
+        over = {s: w for s, w in weights.items() if w > max_weight + 1e-12}
+        if not over:
+            break
+        excess = sum(w - max_weight for w in over.values())
+        for s in over:
+            weights[s] = max_weight
+        free = {s: w for s, w in weights.items() if w < max_weight - 1e-12}
+        free_total = sum(free.values())
+        if free_total <= 0:
+            break
+        for s in free:
+            weights[s] += excess * (weights[s] / free_total)
+
+    return weights

@@ -214,6 +214,43 @@ class PortfolioAccountService:
         """Get list of all transactions."""
         return self.transactions.copy()
 
+    def get_weights(self) -> dict[str, float]:
+        """Current portfolio weights by symbol as a fraction of total equity.
+
+        Cash is excluded; weights sum to (1 - cash_fraction).
+        """
+        total_equity = self.get_total_equity()
+        if total_equity == 0:
+            return {}
+        return {
+            symbol: float(position.market_value / total_equity)
+            for symbol, position in self.positions.items()
+        }
+
+    def compute_drift(self, target_weights: dict[str, float]) -> dict[str, float]:
+        """Absolute drift of each symbol's current weight from its target.
+
+        Symbols present in either the current portfolio or the target are
+        considered, so a position that should be fully exited (target 0) still
+        registers its drift.
+        """
+        current = self.get_weights()
+        symbols = set(current) | set(target_weights)
+        return {
+            symbol: abs(current.get(symbol, 0.0) - float(target_weights.get(symbol, 0.0)))
+            for symbol in symbols
+        }
+
+    def should_rebalance(self, target_weights: dict[str, float], threshold: float = 0.05) -> bool:
+        """True if any symbol has drifted from its target by more than ``threshold``.
+
+        Default threshold is 5%, matching the rebalance policy in the enhancement plan.
+        """
+        drift = self.compute_drift(target_weights)
+        if not drift:
+            return False
+        return max(drift.values()) > threshold
+
     def _record_transaction(self, action: str, amount: Decimal) -> None:
         """Record a non-trade transaction (deposit/withdrawal)."""
         self.transactions.append(

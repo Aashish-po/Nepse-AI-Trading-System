@@ -19,6 +19,7 @@ from app.services.provider_quota import ProviderQuotaService
 from app.services.risk_manager import PositionSizingRequest, RiskManager
 from app.services.signal_backfill import SignalBackfillService
 from app.services.signal_fusion import SignalFusionEngine
+from app.services.signal_streamer import signal_stream_publisher
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -252,7 +253,17 @@ async def fuse_signal(
     # so callers never mistake the advisory for real risk control.
     risk_assessment["enforced"] = False
 
-    return {
+    delivered = await signal_stream_publisher.publish_signal(
+        symbol=fused.symbol,
+        signal=fused.signal.value,
+        confidence=float(fused.confidence),
+        metadata={
+            "risk_state": risk_state.value,
+            "actionable": fused.is_actionable(),
+        },
+    )
+
+    response = {
         "symbol": fused.symbol,
         "signal": fused.signal.value,
         "confidence": fused.confidence,
@@ -262,6 +273,30 @@ async def fuse_signal(
         "weights_used": fused.weights_used,
         "is_actionable": fused.is_actionable(),
         "timestamp": fused.date.isoformat(),
+        "stream_delivered": delivered,
+    }
+    return response
+
+
+@router.post("/demo-broadcast")
+async def demo_broadcast_signal(
+    user: CurrentUser,
+    symbol: str = Query(..., min_length=1, max_length=20),
+    signal: str = Query("HOLD", pattern="^(BUY|SELL|HOLD)$"),
+    confidence: float = Query(0.5, ge=0.0, le=1.0),
+):
+    """Broadcast a demo signal payload to websocket subscribers."""
+    delivered = await signal_stream_publisher.publish_signal(
+        symbol=symbol,
+        signal=signal,
+        confidence=confidence,
+        metadata={"source": "demo-broadcast", "user_id": getattr(user, "id", None)},
+    )
+    return {
+        "status": "ok",
+        "delivered": delivered,
+        "symbol": symbol.upper(),
+        "signal": signal.upper(),
     }
 
 

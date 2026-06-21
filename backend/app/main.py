@@ -25,9 +25,11 @@ from app.api.routes.features import router as features_router
 from app.api.routes.health import router as health_router
 from app.api.routes.market import router as market_router
 from app.api.routes.mlops import router as mlops_router
+from app.api.routes.paper_trading import router as paper_trading_router
 from app.api.routes.portfolio import router as portfolio_router
 from app.api.routes.signals import router as signals_router
 from app.api.routes.strategies import router as strategies_router
+from app.api.routes.streaming import router as streaming_router
 from app.core.logging import configure_logging
 from app.services.monitoring import metrics
 from fastapi import FastAPI, Request
@@ -102,6 +104,8 @@ def create_app() -> FastAPI:
     app.include_router(strategies_router)
     app.include_router(lstm.router)
     app.include_router(portfolio_router)
+    app.include_router(paper_trading_router)
+    app.include_router(streaming_router)
     app.include_router(explainability_router)
     app.include_router(governance_router)
     app.include_router(mlops_router)
