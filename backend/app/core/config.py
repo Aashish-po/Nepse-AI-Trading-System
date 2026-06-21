@@ -42,6 +42,11 @@ class Settings(BaseSettings):
         default=10,
         validation_alias=AliasChoices("DATABASE_POOL_SIZE", "database_pool_size"),
     )
+    database_connect_timeout: int = Field(
+        default=2,
+        validation_alias=AliasChoices("DATABASE_CONNECT_TIMEOUT", "database_connect_timeout"),
+        description="Seconds to wait for a (non-SQLite) DB connection before failing fast.",
+    )
     redis_url: str = Field(
         default="redis://localhost:6379/0",
         validation_alias=AliasChoices("REDIS_URL", "redis_url"),

@@ -1,12 +1,17 @@
 # NEPSE AI Trading Dashboard
 
-A professional-grade Streamlit dashboard for the NEPSE AI Trading System. The app
-(`dashboard/app.py`) ships 12 pages:
+A professional-grade Streamlit dashboard for the NEPSE AI Trading System. The entry
+point (`dashboard/app.py`) is a thin shell that owns page config, styling,
+authentication, navigation, and routing; each page lives in its own module under
+`dashboard/views/`. The app ships 15 pages:
 
 - Market Overview
 - Strategies
 - Backtesting
 - Signals
+- Live Signals
+- Paper Trading
+- Factor Analysis
 - Features
 - Data Sources
 - Alerts
@@ -86,7 +91,6 @@ source venv/bin/activate
 
 # Install dependencies (run from the repo root)
 pip install -r dashboard/requirements-dashboard.txt
-```
 
 ### Configuration
 
@@ -134,31 +138,75 @@ The dashboard will be available at `http://localhost:8501`
 - **Data tables**: Streamlit DataFrames with proper formatting
 - **Input controls**: Sidebar configuration with clear labels
 
+## 📁 File Structure
+
+```text
+dashboard/
+├── app.py                  # Entry point: page config, CSS, auth, navigation, routing
+├── common.py               # Shared config, helpers, formatters, and cached API wrappers
+└── views/                  # One module per page (each exposes a single page_* function)
+    ├── __init__.py
+    ├── market_overview.py
+    ├── strategies.py
+    ├── backtesting.py
+    ├── signals.py
+    ├── live_signals.py
+    ├── paper_trading.py
+    ├── factor_analysis.py
+    ├── features.py
+    ├── data_sources.py
+    ├── alerts.py
+    ├── system_status.py
+    ├── ml_models.py
+    ├── analytics.py
+    ├── mlops.py
+    └── explainability.py
+```
+
+> **Why `views/` and not `pages/`?** Streamlit treats a folder named `pages/`
+> next to the entry script as a built-in multipage app and auto-adds every file
+> there to the sidebar. Because this dashboard uses its own `option_menu`
+> navigation, the page modules live in `views/` to avoid duplicate/blank
+> auto-generated sidebar entries.
+
+### What Each File Contains
+
+- [`dashboard/app.py`](./app.py): Streamlit bootstrap and shared styling, session/auth
+  setup, the startup backend health check, the sidebar navigation menu, and the
+  `PAGES` label→function routing table. Add a page by importing its module and
+  adding one entry to `PAGES` (plus a matching icon in `PAGE_ICONS`).
+- [`dashboard/common.py`](./common.py): Configuration (`API_BASE`, `EXPORT_DIR`),
+  backend health checks, parsing/formatting helpers (`_safe_*`, `_format_*`),
+  cached API wrappers (`load_*`, `get_*`, `run_backtest`, …), and shared UI
+  helpers (`render_hero`, `auth_headers`). Page modules import from here.
+- [`dashboard/views/`](./views): One module per page. Each exposes a single
+  `page_<name>()` render function and imports what it needs from `common`. New
+  pages added here: `live_signals.py` (signal snapshot with websocket fallback),
+  `paper_trading.py` (paper accounts, order entry, trade history), and
+  `factor_analysis.py` (factor analysis on uploaded/pasted returns).
+
 ## 📋 Page Structure
 
 ### Page 1: Market Overview
 
-```
+```text
 Header: 📊 Market Overview
 ├─ Key Metrics (4 columns)
 │  ├─ NSE Index
 │  ├─ Tracked Symbols
 │  ├─ Total Volume
 │  └─ Active Signals
-├─ Data Quality Report (3 metrics)
-│  ├─ Completeness Score
+├─ Data Quality Report
+│  ├─ Data Completeness
 │  ├─ Validation Pass Rate
-│  └─ Average Trust Score
-├─ Quality by Symbol (table)
-└─ Per-Symbol Trust Score (lookup)
-   ├─ Trust Score
-   ├─ Status (Safe/Caution/Unsafe)
-   └─ Quality Components
+│  └─ Avg Trust Score
+├─ Per-Symbol Trust Score Lookup
+└─ Recent Signals & Alerts
 ```
 
 ### Page 2: Strategies
 
-```
+```text
 Header: 🎯 Trading Strategies
 ├─ Strategy Selector (dropdown)
 ├─ Strategy Overview (4 metrics)
@@ -166,14 +214,15 @@ Header: 🎯 Trading Strategies
 │  ├─ Version
 │  ├─ Created At
 │  └─ Status
-├─ Configuration (JSON view)
+├─ Configuration Panel
+│  └─ Strategy Config (JSON viewer)
 ├─ Recent Backtests (table)
-└─ Parameters (JSON view)
+└─ Strategy Parameters (JSON viewer)
 ```
 
 ### Page 3: Backtesting
 
-```
+```text
 Header: 🧪 Backtest & Analysis
 ├─ Configuration Sidebar
 │  ├─ Initial Capital
@@ -195,7 +244,7 @@ Header: 🧪 Backtest & Analysis
 
 ## 🔧 API Integration
 
-Across its 12 pages the dashboard consumes the backend routers: `market`,
+Across its 15 pages the dashboard consumes the backend routers: `market`,
 `data-quality`, `features`, `signals`, `strategies`, `portfolio`, `analytics`,
 `alerts`, `mlops`, `explainability`/governance, and `health`. Core endpoints used
 by the primary pages:
@@ -280,7 +329,7 @@ Use `st.cache_data.clear()` to force refresh if needed.
 
 ### Backend Connection Failed
 
-```
+```text
 ⚠️ Backend not running or failed to connect (GET /strategies/).
 ```
 
@@ -292,7 +341,7 @@ uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --app-dir .
 
 ### API_BASE Not Set
 
-```
+```text
 Using default http://localhost:8000
 ```
 
@@ -341,6 +390,16 @@ export API_BASE="http://your-server:8000"
 - [ ] Dark/light mode toggle
 - [ ] Custom indicator builder
 
+## 👩‍💻 Developer Notes
+
+- Add shared dashboard logic to [`dashboard/common.py`](./common.py) instead of duplicating it across pages.
+- Add a new dashboard page by:
+  1. creating a `views/<name>.py` module that exposes a single `page_<name>()` function, then
+  2. importing it in [`dashboard/app.py`](./app.py) and adding one entry to the `PAGES` table (with a matching Bootstrap icon in `PAGE_ICONS`).
+- Keep page modules focused on rendering and page-specific request handling; push reusable data access and formatting into `common.py`.
+- Keep `app.py` thin — it should only handle config, styling, auth, navigation, and routing.
+- If you change backend endpoints used by the dashboard, update the corresponding view module and the README endpoint notes together.
+
 ## 📞 Support
 
 For issues or questions:
@@ -353,4 +412,3 @@ For issues or questions:
 ## 📄 License
 
 Part of NEPSE AI Trading System
-
