@@ -61,7 +61,6 @@ dummy-variable-rgx = "^_.*"
 # ✅ Import Sorting (fixes your CI issue)
 # -----------------------------------
 [tool.ruff.lint.isort]
-
 combine-as-imports = true
 
 known-first-party = ["backend"]
@@ -105,20 +104,22 @@ indent-style = "space"
 "alembic/*" = ["E501", "F401"]
 
 
+# -----------------------------------
+# ✅ Tool Configuration Fixes
+# -----------------------------------
+# Updated python paths to include project root for dashboard imports
 [tool.pylance]
-pythonPath = "backend"
+pythonPath = "."
 pythonVersion = "3.12"
 
 [tool.pyright]
-extraPaths = ["backend"]
+extraPaths = ["backend", "."]
 pythonVersion = "3.12"
 pythonPlatform = "Windows"
 
 [tool.mypy]
 python_version = "3.12"
-mypy_path = "backend"
+mypy_path = "backend,."
 ignore_missing_imports = true
 check_untyped_defs = true
 explicit_package_bases = true
-
-

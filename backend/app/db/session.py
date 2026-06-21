@@ -16,6 +16,9 @@ else:
     engine_kwargs["pool_size"] = settings.database_pool_size
     engine_kwargs["max_overflow"] = 20
     engine_kwargs["pool_pre_ping"] = True
+    # Fail fast when the database is unreachable instead of hanging on the
+    # default ~15s libpq connect timeout. libpq treats values < 2 as 2s.
+    engine_kwargs["connect_args"] = {"connect_timeout": settings.database_connect_timeout}
 
 engine = create_engine(settings.database_url, **engine_kwargs)
 
