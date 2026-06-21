@@ -18,7 +18,7 @@ torch==2.12.0
 mlflow==3.14.0
 joblib==1.4.2
 pyarrow==24.0.0
-imbalanced-learn==0.13.0
+imbalanced-learn==0.14.2
 shap==0.51.0
 plotly>=5.17.0,<6.0.0
 altair>=6.2.1,<7.0.0
