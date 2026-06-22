@@ -182,6 +182,28 @@ class ExternalApiClient:
     ) -> Any:
         """GET ``path`` and return parsed JSON, applying auth, rate limiting,
         retry/backoff, and error mapping."""
+        return self._request_json("GET", path, params=params, headers=headers)
+
+    def post_json(
+        self,
+        path: str,
+        *,
+        json: Any = None,
+        params: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> Any:
+        """POST ``json`` to ``path`` and return parsed JSON (same plumbing as GET)."""
+        return self._request_json("POST", path, json=json, params=params, headers=headers)
+
+    def _request_json(
+        self,
+        method: str,
+        path: str,
+        *,
+        json: Any = None,
+        params: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> Any:
         url = path if path.startswith("http") else f"{self.base_url}/{path.lstrip('/')}"
         req_params = self._auth_params(dict(params or {}))
         req_headers = self._auth_headers(dict(headers or {}))
@@ -190,7 +212,9 @@ class ExternalApiClient:
         for attempt in range(self._max_retries):
             self._limiter.acquire()
             try:
-                response = self._client.get(url, params=req_params, headers=req_headers)
+                response = self._client.request(
+                    method, url, params=req_params, headers=req_headers, json=json
+                )
             except (httpx.TimeoutException, httpx.TransportError) as exc:
                 last_exc = exc
                 logger.warning(
