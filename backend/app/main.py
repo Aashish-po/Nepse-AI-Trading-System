@@ -21,7 +21,12 @@ from app.api.routes.explainability import (
     gov_router as governance_router,
     router as explainability_router,
 )
-from app.api.routes.external import macro_router, router as external_router
+from app.api.routes.external import (
+    macro_router,
+    news_router,
+    router as external_router,
+    sentiment_router,
+)
 from app.api.routes.features import router as features_router
 from app.api.routes.health import router as health_router
 from app.api.routes.market import router as market_router
@@ -114,6 +119,8 @@ def create_app() -> FastAPI:
     app.include_router(alerts_router)
     app.include_router(external_router)
     app.include_router(macro_router)
+    app.include_router(news_router)
+    app.include_router(sentiment_router)
 
     # LAZY-LOAD ml_router to avoid circular imports
     # Only import ml module when app is created and routers are added
