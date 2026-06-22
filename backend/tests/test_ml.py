@@ -469,3 +469,87 @@ class TestPhase7API:
         assert "total" in payload
         assert "models" in payload
         assert payload["total"] >= 1
+
+
+# ============================================================================
+# PHASE 7+ (P7): Hyperparameter Optimization Integration
+# ============================================================================
+
+
+class TestHyperparameterEvolutionTraining:
+    def test_train_with_evolution_returns_best_params(self, db_session: Session) -> None:
+        _seed_price_series(db_session, "P7EVO", "2024-01-01", count=80)
+        _seed_features(db_session, "P7EVO")
+        builder = DatasetBuilder(session=db_session, feature_version=FEATURE_VERSION)
+        bundle = builder.build("P7EVO")
+        trainer = ModelTrainer(session=db_session)
+
+        result = trainer.train_with_evolution(
+            bundle,
+            model_name="random_forest",
+            population_size=4,
+            generations=2,
+            seed=42,
+        )
+
+        assert result["model_id"]
+        assert result["promotion_status"] in ["promoted", "rejected"]
+        assert isinstance(result["best_params"], dict)
+        # Evolved params must be a member of the default search space.
+        assert result["best_params"]["n_estimators"] in [50, 100, 200, 300]
+        assert result["best_params"]["max_depth"] in [3, 5, 10, 20]
+
+    def test_evolution_history_tracks_generations(self, db_session: Session) -> None:
+        _seed_price_series(db_session, "P7EVOHIST", "2024-01-01", count=80)
+        _seed_features(db_session, "P7EVOHIST")
+        builder = DatasetBuilder(session=db_session, feature_version=FEATURE_VERSION)
+        bundle = builder.build("P7EVOHIST")
+        trainer = ModelTrainer(session=db_session)
+
+        result = trainer.train_with_evolution(
+            bundle,
+            model_name="logistic",
+            population_size=4,
+            generations=3,
+            seed=7,
+        )
+
+        history = result["evolution_history"]
+        assert len(history) == 3
+        assert all("best_score" in gen and "generation" in gen for gen in history)
+        # best_score is the max over generations -> >= every generation's best.
+        assert all(result["best_score"] >= gen["best_score"] for gen in history)
+
+    def test_evolution_persists_tuning_metadata(self, db_session: Session) -> None:
+        _seed_price_series(db_session, "P7EVOREG", "2024-01-01", count=80)
+        _seed_features(db_session, "P7EVOREG")
+        builder = DatasetBuilder(session=db_session, feature_version=FEATURE_VERSION)
+        bundle = builder.build("P7EVOREG")
+        trainer = ModelTrainer(session=db_session)
+
+        result = trainer.train_with_evolution(
+            bundle,
+            model_name="logistic",
+            population_size=4,
+            generations=2,
+        )
+
+        entry = db_session.scalar(
+            select(ModelRegistry).where(ModelRegistry.version == f"v{result['model_id']}")
+        )
+        assert entry is not None
+        assert entry.params["tuning"] == "evolution"
+        assert entry.params["best_params"] == result["best_params"]
+        assert "val_fitness" in entry.metrics
+
+    def test_evolution_requires_validation_returns(self, db_session: Session) -> None:
+        _seed_price_series(db_session, "P7EVONOVAL", "2024-01-01", count=80)
+        _seed_features(db_session, "P7EVONOVAL")
+        builder = DatasetBuilder(session=db_session, feature_version=FEATURE_VERSION)
+        bundle = builder.build("P7EVONOVAL")
+        trainer = ModelTrainer(session=db_session)
+
+        # Strip validation returns -> fitness cannot be scored.
+        bundle.returns_val = None
+        with pytest.raises(ValueError, match="returns_val"):
+            trainer.train_with_evolution(bundle, model_name="logistic")

@@ -54,6 +54,7 @@ from sklearn.calibration import CalibratedClassifierCV
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score, roc_auc_score
 
 from ml.dataset import DatasetBundle
+from ml.meta_learning import HyperparameterEvolution, HyperparamSpace
 
 # ... rest of ml/training.py continues unchanged ...
 
@@ -339,25 +340,175 @@ class ModelTrainer:
             "n_folds": len(fold_metrics),
         }
 
-    def _create_model(self, model_name: str, random_state: int) -> Any:
+    def _create_model(
+        self,
+        model_name: str,
+        random_state: int,
+        params: dict[str, Any] | None = None,
+    ) -> Any:
+        """Instantiate an estimator, optionally overriding hyperparameters.
+
+        ``params`` (e.g. from :meth:`train_with_evolution`) override the per-model
+        defaults below. Unknown keys are passed straight through to the estimator.
+        """
+        overrides = params or {}
         if model_name == "logistic":
-            return LogisticRegression(
-                random_state=random_state, max_iter=1000, class_weight="balanced"
-            )
+            kwargs: dict[str, Any] = {
+                "random_state": random_state,
+                "max_iter": 1000,
+                "class_weight": "balanced",
+            }
+            kwargs.update(overrides)
+            return LogisticRegression(**kwargs)
         elif model_name == "random_forest":
             if RandomForestClassifier is None:
                 raise ValueError("RandomForestClassifier not available")
-            return RandomForestClassifier(
-                n_estimators=100, random_state=random_state, class_weight="balanced"
-            )
+            kwargs = {
+                "n_estimators": 100,
+                "random_state": random_state,
+                "class_weight": "balanced",
+            }
+            kwargs.update(overrides)
+            return RandomForestClassifier(**kwargs)
         elif model_name == "xgboost":
             if not XGB_AVAILABLE or XGBClassifier is None:
                 raise ValueError("XGBClassifier not available - install xgboost")
-            return XGBClassifier(  # ← mypy now trusts this
-                random_state=random_state, eval_metric="logloss", tree_method="hist"
+            kwargs = {
+                "random_state": random_state,
+                "eval_metric": "logloss",
+                "tree_method": "hist",
+            }
+            kwargs.update(overrides)
+            return XGBClassifier(**kwargs)
+        else:
+            raise ValueError(f"Unknown model: {model_name}")
+
+    def _default_search_space(self, model_name: str) -> HyperparamSpace:
+        """Per-model hyperparameter search space for evolutionary tuning."""
+        if model_name == "logistic":
+            return HyperparamSpace(
+                params={"C": [0.01, 0.1, 1.0, 10.0], "solver": ["lbfgs", "liblinear"]}
+            )
+        elif model_name == "random_forest":
+            return HyperparamSpace(
+                params={
+                    "n_estimators": [50, 100, 200, 300],
+                    "max_depth": [3, 5, 10, 20],
+                    "min_samples_leaf": [1, 2, 5],
+                }
+            )
+        elif model_name == "xgboost":
+            return HyperparamSpace(
+                params={
+                    "n_estimators": [50, 100, 200],
+                    "max_depth": [3, 5, 7],
+                    "learning_rate": (0.01, 0.3),
+                    "subsample": (0.6, 1.0),
+                }
             )
         else:
             raise ValueError(f"Unknown model: {model_name}")
+
+    def train_with_evolution(
+        self,
+        bundle: DatasetBundle,
+        model_name: str = "random_forest",
+        space: HyperparamSpace | None = None,
+        population_size: int = 8,
+        generations: int = 5,
+        seed: int = 42,
+        drawdown_penalty: float = 0.5,
+    ) -> dict[str, Any]:
+        """Evolutionary hyperparameter search, then train + register the winner.
+
+        Fitness is the validation-set Sharpe ratio penalised by max drawdown
+        (``sharpe - drawdown_penalty * max_drawdown``), evaluated on the bundle's
+        validation split so the test split stays untouched for the promotion gate.
+
+        Returns the same shape as :meth:`train_baseline` plus ``best_params`` and
+        ``evolution_history``.
+        """
+        if bundle.returns_val is None:
+            raise ValueError("train_with_evolution requires bundle.returns_val for fitness scoring")
+
+        space = space or self._default_search_space(model_name)
+
+        X_train, y_train = bundle.X_train, bundle.y_train
+        X_val, y_val = bundle.X_val, bundle.y_val
+        returns_val = np.asarray(bundle.returns_val, dtype=np.float64)
+
+        def fitness(genome: dict[str, Any]) -> float:
+            try:
+                model = self._create_model(model_name, seed, params=genome)
+                model.fit(X_train, y_train)
+            except Exception as exc:
+                # An invalid genome (e.g. incompatible solver/penalty) should lose,
+                # not abort the whole search.
+                logger.debug("Genome %s failed to fit: %s", genome, exc)
+                return float("-inf")
+            metrics = self._evaluate_model(model, X_val, y_val, returns=returns_val)
+            return metrics["sharpe_ratio"] - drawdown_penalty * metrics["max_drawdown"]
+
+        evolution = HyperparameterEvolution(
+            space,
+            population_size=population_size,
+            generations=generations,
+            seed=seed,
+        )
+        result = evolution.evolve(fitness)
+        best_params = result.best_params
+
+        # Train the final model on train, score it out-of-sample on test for the gate.
+        model = self._create_model(model_name, seed, params=best_params)
+        model.fit(X_train, y_train)
+        test_metrics = self._evaluate_model(
+            model, bundle.X_test, bundle.y_test, returns=bundle.returns_test
+        )
+        metrics = {
+            "accuracy": test_metrics["accuracy"],
+            "precision": test_metrics["precision"],
+            "recall": test_metrics["recall"],
+            "f1_weighted": test_metrics["f1_weighted"],
+            "roc_auc": test_metrics["roc_auc"],
+            "sharpe_ratio": test_metrics.get("sharpe_ratio", 0.0),
+            "max_drawdown": test_metrics.get("max_drawdown", 0.0),
+            "win_rate": test_metrics.get("win_rate", 0.0),
+            "val_fitness": float(result.best_score),
+        }
+
+        promotion_status = self._promotion_gate(metrics)
+
+        model_id = str(uuid.uuid4())[:8]
+        model_path = self._model_dir / f"{model_name}_v{model_id}.joblib"
+        joblib.dump(model, model_path)
+
+        registry = ModelRegistry(
+            name=model_name,
+            version=f"v{model_id}",
+            feature_version=bundle.feature_version,
+            params={
+                "model_type": model_name,
+                "status": promotion_status,
+                "tuning": "evolution",
+                "best_params": best_params,
+                "generations": generations,
+                "population_size": population_size,
+            },
+            model_artifact_path=str(model_path),
+            metrics=metrics,
+        )
+        self._session.add(registry)
+        self._session.commit()
+
+        return {
+            "model_id": model_id,
+            "model": model,
+            "metrics": metrics,
+            "promotion_status": promotion_status,
+            "best_params": best_params,
+            "best_score": float(result.best_score),
+            "evolution_history": result.history,
+        }
 
     def _evaluate_model(
         self, model, X: Any, y: Any, returns: NDArray[np.floating] | None = None
