@@ -21,8 +21,10 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import sqlalchemy as sa
+from app.core.config import Settings, settings as default_settings
 from app.db.session import SessionLocal
 from app.models.news import NewsArticle, NewsMention, SentimentRun
+from app.services.external.providers import PROVIDERS_BY_KEY, is_enabled
 from sqlalchemy.orm import Session
 
 from ml.sentiment import SentimentAnalyzer
@@ -31,6 +33,32 @@ logger = logging.getLogger(__name__)
 
 PROVIDER = "newsapi"
 DEFAULT_WINDOW_DAYS = 7
+
+
+def build_analyzer(cfg: Settings | None = None) -> SentimentAnalyzer:
+    """Return a sentiment analyzer, HF-enriched when enabled, else lexicon.
+
+    When Hugging Face is enabled+keyed, its hosted model is injected as the
+    analyzer's primary backend; ``SentimentAnalyzer.analyze`` transparently falls
+    back to the deterministic lexicon backend if any HF call fails. With HF
+    disabled (the default) this is the plain offline lexicon analyzer.
+    """
+    cfg = cfg or default_settings
+    analyzer = SentimentAnalyzer(backend="lexicon")
+    if is_enabled(PROVIDERS_BY_KEY["huggingface"], cfg):
+        try:
+            from app.services.external.huggingface import HuggingFaceSentimentBackend
+
+            # Duck-typed: HF backend implements the same score()/backend_name
+            # protocol as TransformerSentimentBackend.
+            analyzer._transformer = HuggingFaceSentimentBackend(cfg)  # type: ignore[assignment]
+            logger.info(
+                "sentiment: Hugging Face enrichment enabled (model=%s)", cfg.huggingface_model
+            )
+        except Exception as exc:  # noqa: BLE001 — never let HF init break sentiment
+            logger.warning("HF backend init failed; using lexicon: %s", exc)
+    return analyzer
+
 
 # Below this aggregate confidence the day's news is treated as non-informative:
 # the score collapses to neutral (0.5) so weak signals never tilt fusion.
@@ -118,7 +146,9 @@ class SentimentRunService:
         as_of = as_of or datetime.now(UTC).date()
         session = self._get_session()
         owns_session = self._session is None
-        analyzer = self._analyzer or SentimentAnalyzer(backend="lexicon")
+        # HF-enriched when enabled (with automatic lexicon fallback); plain
+        # lexicon otherwise. Persisted runs record the backend actually used.
+        analyzer = self._analyzer or build_analyzer()
         results: dict[str, Any] = {}
         try:
             for symbol in symbols:
