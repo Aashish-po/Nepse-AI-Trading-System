@@ -91,3 +91,52 @@ class MacroFeatureBuilder:
             .order_by(MacroObservation.date.desc())
             .limit(1)
         )
+
+
+class NewsSentimentFeatureBuilder:
+    """Per-stock trailing-window news-sentiment features, point-in-time safe.
+
+    Delegates aggregation to ``external_sentiment.aggregate_symbol_sentiment`` so
+    feature generation and the ``/news/sentiment/run`` endpoint share one
+    confidence-gated definition. A feature for date ``T`` uses only articles
+    published at or before ``T``.
+    """
+
+    def __init__(
+        self,
+        session: Session | None = None,
+        *,
+        window_days: int = 7,
+    ) -> None:
+        self._session = session
+        self._window_days = window_days
+
+    def _get_session(self) -> Session:
+        return self._session if self._session is not None else SessionLocal()
+
+    def build_features(self, symbol: str, as_of: date) -> dict[str, Any]:
+        """Return ``{values: {...}, meta: {...}}`` for one stock's news features."""
+        # Imported here to avoid a circular import at module load
+        # (external_sentiment imports ml.sentiment, which is heavier).
+        from app.services.external_sentiment import aggregate_symbol_sentiment
+
+        session = self._get_session()
+        owns_session = self._session is None
+        try:
+            agg = aggregate_symbol_sentiment(session, symbol, as_of, window_days=self._window_days)
+            return {
+                "values": {
+                    "news_sentiment_score_7d": agg["score"],
+                    "news_sentiment_confidence_7d": agg["confidence"],
+                    "news_article_count_7d": float(agg["count"]),
+                },
+                "meta": {
+                    "news_provider": "newsapi",
+                    "news_as_of": as_of.isoformat(),
+                    "news_window_days": self._window_days,
+                    "news_backend": agg["backend"],
+                },
+            }
+        finally:
+            if owns_session:
+                session.close()

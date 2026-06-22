@@ -49,3 +49,39 @@ def test_macro_series_and_observations_endpoints(client, db_session) -> None:
 
     missing = client.get("/macro/observations", params={"series_id": "NOPE"})
     assert missing.status_code == 404
+
+
+def test_newsapi_sync_requires_body(client) -> None:
+    # newsapi sync without a symbol->query body is a 422, not a crash.
+    resp = client.post("/external/sync/newsapi")
+    assert resp.status_code == 422
+
+
+def test_news_and_sentiment_endpoints(client, db_session) -> None:
+    from app.models.news import NewsArticle, NewsMention
+
+    article = NewsArticle(
+        provider="newsapi",
+        url="https://news.test/a",
+        url_hash="hash-a",
+        title="profit surges strong upgrade",
+        source="Wire",
+        published_date=date(2024, 6, 5),
+    )
+    db_session.add(article)
+    db_session.flush()
+    db_session.add(NewsMention(article_id=article.id, symbol="NABIL"))
+    db_session.commit()
+
+    articles = client.get("/news/articles", params={"symbol": "NABIL"})
+    assert articles.status_code == 200
+    assert any(a["title"].startswith("profit") for a in articles.json())
+
+    run = client.post("/news/sentiment/run", json={"symbols": ["NABIL"], "as_of": "2024-06-10"})
+    assert run.status_code == 200
+    assert run.json()["status"] == "success"
+
+    feats = client.get("/sentiment/features", params={"symbol": "NABIL"})
+    assert feats.status_code == 200
+    rows = feats.json()
+    assert rows and rows[0]["count"] == 1

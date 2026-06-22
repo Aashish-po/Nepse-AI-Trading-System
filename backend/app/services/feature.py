@@ -83,6 +83,12 @@ FEATURE_REGISTRY: dict[str, dict[str, Any]] = {
     "fred_dff": {"group": "macro", "base_weight": 0.4},
     "fred_cpi": {"group": "macro", "base_weight": 0.4},
     "fred_unrate": {"group": "macro", "base_weight": 0.4},
+    # External news-sentiment features. Per-stock, point-in-time safe; produced by
+    # app.services.external_features.NewsSentimentFeatureBuilder over a trailing
+    # window. Confidence-gated so low-confidence days do not distort signals.
+    "news_sentiment_score_7d": {"group": "sentiment", "base_weight": 0.5},
+    "news_sentiment_confidence_7d": {"group": "sentiment", "base_weight": 0.3},
+    "news_article_count_7d": {"group": "sentiment", "base_weight": 0.2},
 }
 
 
