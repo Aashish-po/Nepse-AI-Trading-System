@@ -75,6 +75,14 @@ FEATURE_REGISTRY: dict[str, dict[str, Any]] = {
     "volume_sma_20": {"group": "volume", "base_weight": 0.7},
     "volume_ratio": {"group": "volume", "base_weight": 0.7},
     "price_range": {"group": "volatility", "base_weight": 0.8},
+    # External macro features (FRED). Market-wide, point-in-time safe; produced
+    # by app.services.external_features.MacroFeatureBuilder and merged into a
+    # stock's feature vector. Lower weights: advisory regime context, not signals.
+    "fred_dgs10": {"group": "macro", "base_weight": 0.4},
+    "fred_dgs2": {"group": "macro", "base_weight": 0.4},
+    "fred_dff": {"group": "macro", "base_weight": 0.4},
+    "fred_cpi": {"group": "macro", "base_weight": 0.4},
+    "fred_unrate": {"group": "macro", "base_weight": 0.4},
 }
 
 

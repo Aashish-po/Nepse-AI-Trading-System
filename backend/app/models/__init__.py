@@ -24,7 +24,9 @@ from app.models.data_source import DataSource, IngestionLog
 from app.models.dataset import Dataset
 from app.models.drift_event import DriftEvent
 from app.models.feature import Feature, Features
+from app.models.macro import MacroObservation, MacroSeries
 from app.models.model_registry import ModelRegistry
+from app.models.news import NewsArticle, NewsMention, SentimentRun
 from app.models.portfolio_snapshot import PortfolioSnapshot
 from app.models.price import Price
 from app.models.quota import ProviderQuotaUsage
@@ -53,7 +55,12 @@ __all__ = [
     "DriftEvent",
     "Feature",
     "Features",
+    "MacroSeries",
+    "MacroObservation",
     "ModelRegistry",
+    "NewsArticle",
+    "NewsMention",
+    "SentimentRun",
     "PortfolioSnapshot",
     "Price",
     "ProviderQuotaUsage",
