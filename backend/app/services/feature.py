@@ -89,6 +89,12 @@ FEATURE_REGISTRY: dict[str, dict[str, Any]] = {
     "news_sentiment_score_7d": {"group": "sentiment", "base_weight": 0.5},
     "news_sentiment_confidence_7d": {"group": "sentiment", "base_weight": 0.3},
     "news_article_count_7d": {"group": "sentiment", "base_weight": 0.2},
+    # External global-market context (Marketstack/Finnhub). Trailing benchmark
+    # returns, point-in-time safe; produced by
+    # app.services.external_features.GlobalMarketFeatureBuilder. Advisory regime
+    # context, low weight.
+    "global_equity_return_5d": {"group": "global", "base_weight": 0.3},
+    "global_equity_return_20d": {"group": "global", "base_weight": 0.3},
 }
 
 

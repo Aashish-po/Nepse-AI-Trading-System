@@ -12,15 +12,19 @@ from datetime import date
 import sqlalchemy as sa
 from app.core.security import get_current_user
 from app.db.session import get_db
+from app.models.external_market import ExternalPrice
 from app.models.macro import MacroObservation, MacroSeries
 from app.models.news import NewsArticle, SentimentRun
 from app.models.user import User
 from app.services.external.providers import provider_status
 from app.services.external_macro import MacroIngestionService
+from app.services.external_market import MarketIngestionService
 from app.services.external_news import NewsIngestionService
 from app.services.external_sentiment import SentimentRunService
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
+
+_MARKET_PROVIDERS = {"marketstack", "finnhub"}
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +56,10 @@ def sync_provider(
         default=None,
         description="newsapi only: map of symbol -> search query, e.g. {'NABIL': 'Nabil Bank'}",
     ),
+    symbols: list[str] | None = Body(
+        default=None,
+        description="marketstack/finnhub only: list of provider symbols, e.g. ['SPY','QQQ']",
+    ),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict[str, object]:
@@ -74,9 +82,50 @@ def sync_provider(
         result = NewsIngestionService(session=db).run(query_by_symbol)
         logger.info("user %s triggered newsapi sync: %s", user.id, result.get("status"))
         return result
+    if key in _MARKET_PROVIDERS:
+        if not symbols:
+            raise HTTPException(
+                status_code=422,
+                detail=f"{key} sync requires a JSON body with a non-empty 'symbols' list",
+            )
+        result = MarketIngestionService(key, session=db).run(symbols)
+        logger.info("user %s triggered %s sync: %s", user.id, key, result.get("status"))
+        return result
     raise HTTPException(
         status_code=404, detail=f"Unknown or not-yet-supported provider: {provider}"
     )
+
+
+@router.get("/prices")
+def list_external_prices(
+    provider: str = Query(..., description="e.g. marketstack or finnhub"),
+    symbol: str = Query(..., description="Provider symbol, e.g. SPY"),
+    start: date | None = Query(None),
+    end: date | None = Query(None),
+    limit: int = Query(500, le=5000),
+    db: Session = Depends(get_db),
+) -> list[dict[str, object]]:
+    """Inspect ingested external OHLCV (separate from NEPSE prices)."""
+    stmt = sa.select(ExternalPrice).where(
+        ExternalPrice.provider == provider.lower(),
+        ExternalPrice.external_symbol == symbol.upper(),
+    )
+    if start is not None:
+        stmt = stmt.where(ExternalPrice.date >= start)
+    if end is not None:
+        stmt = stmt.where(ExternalPrice.date <= end)
+    stmt = stmt.order_by(ExternalPrice.date.desc()).limit(limit)
+    return [
+        {
+            "date": p.date.isoformat(),
+            "open": p.open,
+            "high": p.high,
+            "low": p.low,
+            "close": p.close,
+            "volume": p.volume,
+        }
+        for p in db.scalars(stmt).all()
+    ]
 
 
 @macro_router.get("/series")
