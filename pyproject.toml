@@ -1,12 +1,6 @@
-[tool.pytest.ini_options]
-testpaths = ["backend/tests"]
-pythonpath = ["backend"]
-asyncio_mode = "auto"
-markers = [
-    "integration: integration tests",
-    "asyncio: marks tests as async (deselect with '-m \"not asyncio\"')",
-]
-
+# pytest configuration lives in pytest.ini (single source of truth).
+# pytest prefers pytest.ini over pyproject.toml, so keeping a duplicate
+# [tool.pytest.ini_options] block here would be silently ignored.
 
 # -----------------------------------
 # ✅ Ruff Configuration
