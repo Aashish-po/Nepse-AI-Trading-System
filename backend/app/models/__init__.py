@@ -23,6 +23,7 @@ from app.models.data_quality import (
 from app.models.data_source import DataSource, IngestionLog
 from app.models.dataset import Dataset
 from app.models.drift_event import DriftEvent
+from app.models.external_market import ExternalPrice, ExternalSymbol
 from app.models.feature import Feature, Features
 from app.models.macro import MacroObservation, MacroSeries
 from app.models.model_registry import ModelRegistry
@@ -53,6 +54,8 @@ __all__ = [
     "IngestionLog",
     "Dataset",
     "DriftEvent",
+    "ExternalPrice",
+    "ExternalSymbol",
     "Feature",
     "Features",
     "MacroSeries",
