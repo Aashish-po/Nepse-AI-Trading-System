@@ -475,6 +475,13 @@ class FeatureService:
         return max(0.5, penalty)
 
     def _compute_feature_correlations(self, features_df: pd.DataFrame) -> dict[str, float]:
+        """Compute per-feature correlation penalties from the full Pearson matrix.
+
+        Complexity: O(n·m²) where n = rows (dates), m = feature columns. Called once
+        per batch — NOT per row. For very large feature sets (m > 50) or long
+        lookback windows (n > 500), consider switching to an incremental / EWMA-based
+        correlation estimate to avoid the full-matrix cost.
+        """
         feature_columns = [c for c in features_df.columns if c != "date" and c != "day_index"]
         if len(feature_columns) < 2:
             return {col: 1.0 for col in feature_columns}
