@@ -28,6 +28,21 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
+# ── Risk-rule defaults (mirrors strategy.py) ────────────────────────
+DEFAULT_MAX_POSITION_SIZE_PCT = 0.1  # max 10 % of equity per position
+DEFAULT_SINGLE_STOCK_EXPOSURE_PCT = 0.2  # max 20 % of equity in one symbol
+DEFAULT_MAX_OPEN_POSITIONS = 5  # max concurrent positions
+DEFAULT_CASH_RESERVE_PCT = 0.1  # reserve 10 % of initial capital
+
+# ── Exit-signal defaults ────────────────────────────────────────────
+DEFAULT_TAKE_PROFIT_TARGET = 0.1  # 10 % return triggers take-profit
+DEFAULT_STOP_LOSS_LIMIT = 0.05  # -5 % triggers stop-loss
+DEFAULT_TRAILING_STOP_PCT = 0.10  # 10 % below trailing high
+
+# ── Execution defaults ──────────────────────────────────────────────
+DAILY_VOLUME_THRESHOLD = 0.3  # max 30 % of daily volume per fill
+MAX_FILL_RATE = 0.7  # cap fill rate at 70 % when volume-constrained
+
 
 @dataclass
 class PendingSignal:
@@ -407,21 +422,21 @@ class BacktestEngine:
                 if rsi is not None and rsi > params.get("threshold", 70):
                     return True
             elif rule_type == "take_profit":
-                target = params.get("target", 0.1)
+                target = params.get("target", DEFAULT_TAKE_PROFIT_TARGET)
                 if position.quantity > 0 and price_row:
                     current_price = Decimal(str(price_row.get("close", 0)))
                     return_pct = (current_price - position.entry_price) / position.entry_price
                     if return_pct >= target:
                         return True
             elif rule_type == "stop_loss":
-                stop = params.get("stop", 0.05)
+                stop = params.get("stop", DEFAULT_STOP_LOSS_LIMIT)
                 if position.quantity > 0 and price_row:
                     current_price = Decimal(str(price_row.get("close", 0)))
                     return_pct = (current_price - position.entry_price) / position.entry_price
                     if return_pct <= -stop:
                         return True
             elif rule_type == "trailing_stop":
-                trail_pct = params.get("trail_pct", 0.10)
+                trail_pct = params.get("trail_pct", DEFAULT_TRAILING_STOP_PCT)
                 if position.quantity > 0 and price_row:
                     high = price_row.get("high")
                     close = price_row.get("close")
@@ -455,18 +470,18 @@ class BacktestEngine:
             params = rule.get("params", {})
 
             if rule_type == "max_position_size":
-                max_pct = params.get("max_pct", 0.1)
+                max_pct = params.get("max_pct", DEFAULT_MAX_POSITION_SIZE_PCT)
                 max_qty = int(min(max_qty, equity * max_pct / price)) if price > 0 else 0
             elif rule_type == "single_stock_exposure":
-                max_pct = params.get("max_pct", 0.2)
+                max_pct = params.get("max_pct", DEFAULT_SINGLE_STOCK_EXPOSURE_PCT)
                 max_shares = int(equity * max_pct / price) if price > 0 else 0
                 max_qty = min(max_qty, max_shares)
             elif rule_type == "max_open_positions":
-                max_pos = params.get("max_count", 5)
+                max_pos = params.get("max_count", DEFAULT_MAX_OPEN_POSITIONS)
                 if len(positions) >= max_pos:
                     return {"max_quantity": 0}
             elif rule_type == "cash_reserve":
-                reserve_pct = params.get("reserve_pct", 0.1)
+                reserve_pct = params.get("reserve_pct", DEFAULT_CASH_RESERVE_PCT)
                 reserve_amount = initial_capital * reserve_pct
                 available_cash = cash - reserve_amount
                 max_shares = int(available_cash / price) if price > 0 and available_cash > 0 else 0
@@ -484,9 +499,9 @@ class BacktestEngine:
         if desired_qty <= 0:
             return Decimal("0")
         max_fill = Decimal(str(volume)) * Decimal(str(self.partial_fill_threshold))
-        if desired_qty <= volume * 0.3:
+        if desired_qty <= volume * DAILY_VOLUME_THRESHOLD:
             return Decimal("1.0")
-        return min(Decimal("0.7"), max_fill / Decimal(str(desired_qty)))
+        return min(Decimal(str(MAX_FILL_RATE)), max_fill / Decimal(str(desired_qty)))
 
     def _calculate_metrics(
         self, equity_curve: list[dict[str, Any]], trades: list[dict[str, Any]]

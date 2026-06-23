@@ -571,12 +571,12 @@ class DataQualityService:
         session.add(history)
         session.commit()
 
-    def get_source_accuracy_score(self, source_id: int) -> float:
-        session = self._get_session()
-        owns_session = self._session is None
+    def get_source_accuracy_score(self, source_id: int, session: Session | None = None) -> float:
+        owns_session = session is None and self._session is None
+        sess = session or self._get_session()
         try:
             logs = list(
-                session.scalars(
+                sess.scalars(
                     sa.select(IngestionLog)
                     .where(IngestionLog.source_id == source_id)
                     .order_by(IngestionLog.completed_at.desc())
@@ -593,7 +593,7 @@ class DataQualityService:
             return max(0.0, success_rate - rejection_penalty)
         finally:
             if owns_session:
-                session.close()
+                sess.close()
 
     def calculate_weighted_price(
         self, symbol: str, date_str: str, price_field: str = "close"
@@ -704,7 +704,7 @@ class DataQualityService:
             )
 
             for source in sources:
-                accuracy = self.get_source_accuracy_score(source.id)
+                accuracy = self.get_source_accuracy_score(source.id, session=session)
                 if accuracy >= recovery_threshold:
                     source.is_active = True
                     source.accuracy_score = accuracy

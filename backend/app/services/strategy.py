@@ -13,6 +13,22 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
+# ── Risk-rule defaults ──────────────────────────────────────────────
+DEFAULT_MAX_POSITION_SIZE_PCT = 0.1  # max 10 % of equity per position
+DEFAULT_SINGLE_STOCK_EXPOSURE_PCT = 0.2  # max 20 % of equity in one symbol
+DEFAULT_MAX_OPEN_POSITIONS = 5  # max concurrent positions
+DEFAULT_CASH_RESERVE_PCT = 0.1  # reserve 10 % of initial capital
+
+# ── Entry-signal defaults ───────────────────────────────────────────
+DEFAULT_RSI_OVERSOLD_THRESHOLD = 30
+DEFAULT_RSI_OVERBOUGHT_THRESHOLD = 70
+DEFAULT_BREAKOUT_HIGH_THRESHOLD = 105.0
+
+# ── Exit-signal defaults ────────────────────────────────────────────
+DEFAULT_TAKE_PROFIT_TARGET = 0.1  # 10 % return triggers take-profit
+DEFAULT_STOP_LOSS_LIMIT = 0.05  # -5 % triggers stop-loss
+DEFAULT_TRAILING_STOP_PCT = 0.10  # 10 % below trailing high
+
 
 class StrategyService:
     def __init__(self, session: Session | None = None) -> None:
@@ -128,11 +144,11 @@ class StrategyService:
 
         if rule_type == "rsi_oversold":
             rsi = features.get("rsi_14")
-            if rsi is not None and rsi < params.get("threshold", 30):
+            if rsi is not None and rsi < params.get("threshold", DEFAULT_RSI_OVERSOLD_THRESHOLD):
                 return True
         elif rule_type == "rsi_overbought":
             rsi = features.get("rsi_14")
-            if rsi is not None and rsi > params.get("threshold", 70):
+            if rsi is not None and rsi > params.get("threshold", DEFAULT_RSI_OVERBOUGHT_THRESHOLD):
                 return True
         elif rule_type == "sma_cross_up":
             sma_20 = features.get("sma_20")
@@ -152,7 +168,7 @@ class StrategyService:
                 return True
         elif rule_type == "breakout_high":
             close = features.get("close")
-            high_threshold = params.get("threshold", 105.0)
+            high_threshold = params.get("threshold", DEFAULT_BREAKOUT_HIGH_THRESHOLD)
             if close is not None and close > high_threshold:
                 return True
 
@@ -172,10 +188,12 @@ class StrategyService:
 
             if rule_type == "rsi_exit_long":
                 rsi = features.get("rsi_14")
-                if rsi is not None and rsi > params.get("threshold", 70):
+                if rsi is not None and rsi > params.get(
+                    "threshold", DEFAULT_RSI_OVERBOUGHT_THRESHOLD
+                ):
                     return True
             elif rule_type == "take_profit":
-                target = params.get("target", 0.1)
+                target = params.get("target", DEFAULT_TAKE_PROFIT_TARGET)
                 if position:
                     current_price = features.get("close")
                     if current_price and position.entry_price:
@@ -185,7 +203,7 @@ class StrategyService:
                         if return_pct >= target:
                             return True
             elif rule_type == "stop_loss":
-                stop = params.get("stop", 0.05)
+                stop = params.get("stop", DEFAULT_STOP_LOSS_LIMIT)
                 if position:
                     current_price = features.get("close")
                     if current_price and position.entry_price:
@@ -195,7 +213,7 @@ class StrategyService:
                         if return_pct <= -stop:
                             return True
             elif rule_type == "trailing_stop":
-                trail_pct = params.get("trail_pct", 0.10)
+                trail_pct = params.get("trail_pct", DEFAULT_TRAILING_STOP_PCT)
                 if position and hasattr(position, "trailing_high"):
                     close = features.get("close")
                     if close:
@@ -222,22 +240,22 @@ class StrategyService:
             params = rule.get("params", {})
 
             if rule_type == "max_position_size":
-                max_pct = params.get("max_pct", 0.1)
+                max_pct = params.get("max_pct", DEFAULT_MAX_POSITION_SIZE_PCT)
                 max_shares = int(portfolio.get("cash", 0) * max_pct / portfolio.get("price", 1))
                 allowed_qty = min(allowed_qty, max_shares)
             elif rule_type == "single_stock_exposure":
-                max_pct = params.get("max_pct", 0.2)
+                max_pct = params.get("max_pct", DEFAULT_SINGLE_STOCK_EXPOSURE_PCT)
                 max_value = portfolio.get("cash", 0) * max_pct
                 max_shares = int(max_value / portfolio.get("price", 1))
                 allowed_qty = min(allowed_qty, max_shares)
             elif rule_type == "max_open_positions":
                 current_positions = portfolio.get("positions", {})
-                max_pos = params.get("max_count", 5)
+                max_pos = params.get("max_count", DEFAULT_MAX_OPEN_POSITIONS)
                 if len(current_positions) >= max_pos:
                     return {"max_quantity": 0}
             elif rule_type == "cash_reserve":
                 initial_capital = portfolio.get("initial_capital", portfolio.get("cash", 0))
-                reserve_pct = params.get("reserve_pct", 0.1)
+                reserve_pct = params.get("reserve_pct", DEFAULT_CASH_RESERVE_PCT)
                 reserve_amount = initial_capital * reserve_pct
                 available_cash = portfolio.get("cash", 0) - reserve_amount
                 max_shares = (
