@@ -51,6 +51,14 @@ PROVIDERS: tuple[ProviderSpec, ...] = (
     ProviderSpec(
         "finnhub", "FINNHUB", "candles/fundamentals", "finnhub_enabled", "finnhub_api_key", 0.80
     ),
+    ProviderSpec(
+        "contex_dev",
+        "CONTEX_DEV",
+        "enriched context / entity extraction",
+        "contex_dev_enabled",
+        "contex_dev_api_key",
+        0.75,
+    ),
     ProviderSpec("polygon", "POLYGON", "market data", "polygon_enabled", "polygon_api_key", 0.85),
     ProviderSpec(
         "iexcloud", "IEXCLOUD", "US equities", "iexcloud_enabled", "iexcloud_api_key", 0.80

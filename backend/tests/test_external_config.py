@@ -29,6 +29,7 @@ def _default_settings() -> Settings:
         coingecko_enabled=False,
         fixer_enabled=False,
         exchangerate_host_enabled=False,
+        contex_dev_enabled=False,
     )
 
 
