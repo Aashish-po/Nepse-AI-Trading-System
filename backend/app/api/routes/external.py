@@ -12,6 +12,7 @@ from datetime import date
 import sqlalchemy as sa
 from app.core.security import get_current_user
 from app.db.session import get_db
+from app.models.data_source import IngestionLog
 from app.models.external_market import ExternalPrice
 from app.models.macro import MacroObservation, MacroSeries
 from app.models.news import NewsArticle, SentimentRun
@@ -35,12 +36,40 @@ sentiment_router = APIRouter(prefix="/sentiment", tags=["sentiment"])
 
 
 @router.get("/health")
-def external_health() -> dict[str, object]:
-    """Provider availability summary (no network call, no secrets)."""
+def external_health(db: Session = Depends(get_db)) -> dict[str, object]:
+    """Provider availability summary with last-sync freshness.
+
+    Returns per-provider config status plus the most recent ``IngestionLog``
+    timestamp and success/failure breakdown, so operators can see at a glance
+    which providers are alive and how stale their data is. No network calls, no
+    secrets — the endpoint is read-only and unauthenticated.
+    """
     providers = provider_status()
+
+    # -- per-provider last-ingestion metadata from IngestionLog ----------------
+    freshness: dict[str, dict[str, object]] = {}
+    # Fetch the most recent log per provider source name, SQLite-friendly.
+    logs_stmt = sa.select(IngestionLog).where(
+        IngestionLog.source.isnot(None),
+        IngestionLog.id.in_(
+            sa.select(sa.func.max(IngestionLog.id))
+            .where(IngestionLog.source.isnot(None))
+            .group_by(IngestionLog.source)
+            .scalar_subquery()
+        ),
+    )
+    for log in db.scalars(logs_stmt).all():
+        freshness[str(log.source).lower()] = {
+            "last_run_at": log.completed_at.isoformat() if log.completed_at else None,
+            "last_status": log.status,
+            "last_records_fetched": log.records_fetched,
+            "last_records_inserted": log.records_inserted,
+        }
+
     return {
         "providers": providers,
         "usable_count": sum(1 for p in providers if p["usable"]),
+        "freshness": freshness,
     }
 
 
