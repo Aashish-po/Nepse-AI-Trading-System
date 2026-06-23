@@ -215,6 +215,20 @@ class Settings(BaseSettings):
         ),
     )
 
+    # Context.dev — enriched market context / entity extraction
+    contex_dev_enabled: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("CONTEX_DEV_ENABLED", "contex_dev_enabled"),
+    )
+    contex_dev_api_key: str = Field(
+        default="",
+        validation_alias=AliasChoices("CONTEX.DEV", "contex_dev_api_key"),
+    )
+    contex_dev_base_url: str = Field(
+        default="https://api.context.dev/",
+        validation_alias=AliasChoices("CONTEX_BASE_URL", "contex_dev_base_url"),
+    )
+
     # Optional scale providers (disabled by default)
     polygon_enabled: bool = Field(
         default=False,
