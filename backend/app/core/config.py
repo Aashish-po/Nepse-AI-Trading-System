@@ -229,44 +229,6 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("CONTEX_BASE_URL", "contex_dev_base_url"),
     )
 
-    # Optional scale providers (disabled by default)
-    polygon_enabled: bool = Field(
-        default=False,
-        validation_alias=AliasChoices("POLYGON_ENABLED", "polygon_enabled"),
-    )
-    polygon_api_key: str = Field(
-        default="",
-        validation_alias=AliasChoices("POLYGON_API_KEY", "polygon_api_key"),
-    )
-
-    iexcloud_enabled: bool = Field(
-        default=False,
-        validation_alias=AliasChoices("IEXCLOUD_ENABLED", "iexcloud_enabled"),
-    )
-    iexcloud_api_key: str = Field(
-        default="",
-        validation_alias=AliasChoices("IEXCLOUD_API_KEY", "iexcloud_api_key"),
-    )
-
-    coingecko_enabled: bool = Field(
-        default=False,
-        validation_alias=AliasChoices("COINGECKO_ENABLED", "coingecko_enabled"),
-    )
-
-    fixer_enabled: bool = Field(
-        default=False,
-        validation_alias=AliasChoices("FIXER_ENABLED", "fixer_enabled"),
-    )
-    fixer_api_key: str = Field(
-        default="",
-        validation_alias=AliasChoices("FIXER_API_KEY", "fixer_api_key"),
-    )
-
-    exchangerate_host_enabled: bool = Field(
-        default=False,
-        validation_alias=AliasChoices("EXCHANGERATE_HOST_ENABLED", "exchangerate_host_enabled"),
-    )
-
     @model_validator(mode="after")
     def _require_secret_key_outside_local(self) -> Settings:
         # A predictable secret lets anyone forge JWTs. Allow the placeholder only
