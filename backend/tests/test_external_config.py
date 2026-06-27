@@ -24,11 +24,6 @@ def _default_settings() -> Settings:
         huggingface_enabled=False,
         marketstack_enabled=False,
         finnhub_enabled=False,
-        polygon_enabled=False,
-        iexcloud_enabled=False,
-        coingecko_enabled=False,
-        fixer_enabled=False,
-        exchangerate_host_enabled=False,
         contex_dev_enabled=False,
     )
 
@@ -49,11 +44,6 @@ def test_enabled_flag_without_key_is_not_usable() -> None:
 def test_enabled_flag_with_key_is_usable() -> None:
     cfg = Settings(_env_file=None, fred_enabled=True, fred_api_key="abc")  # type: ignore[call-arg]
     assert is_enabled(PROVIDERS_BY_KEY["fred"], cfg) is True
-
-
-def test_keyless_provider_usable_on_flag_alone() -> None:
-    cfg = Settings(_env_file=None, coingecko_enabled=True)  # type: ignore[call-arg]
-    assert is_enabled(PROVIDERS_BY_KEY["coingecko"], cfg) is True
 
 
 def test_provider_status_reports_no_secrets() -> None:
