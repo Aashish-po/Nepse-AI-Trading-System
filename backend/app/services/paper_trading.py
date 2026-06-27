@@ -21,7 +21,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
-from enum import Enum
+from enum import StrEnum
 
 logger = logging.getLogger(__name__)
 
@@ -32,17 +32,17 @@ DEFAULT_SLIPPAGE_BPS = Decimal("5.0")  # 5 basis points adverse price move
 DEFAULT_PARTIAL_FILL_THRESHOLD = Decimal("0.3")  # max share of bar volume per order
 
 
-class OrderSide(str, Enum):
+class OrderSide(StrEnum):
     BUY = "BUY"
     SELL = "SELL"
 
 
-class OrderType(str, Enum):
+class OrderType(StrEnum):
     MARKET = "MARKET"
     LIMIT = "LIMIT"
 
 
-class OrderStatus(str, Enum):
+class OrderStatus(StrEnum):
     FILLED = "FILLED"
     PARTIAL = "PARTIAL"
     REJECTED = "REJECTED"

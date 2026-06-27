@@ -3,14 +3,14 @@
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 
 from sqlalchemy import func
 
 logger = logging.getLogger(__name__)
 
 
-class RiskState(str, Enum):
+class RiskState(StrEnum):
     NORMAL = "normal"
     ELEVATED = "elevated"
     CRITICAL = "critical"

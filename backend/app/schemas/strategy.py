@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class BenchmarkType(str, Enum):
+class BenchmarkType(StrEnum):
     BUY_AND_HOLD = "buy_and_hold"
     NEPSE_INDEX = "nepse_index"
     SECTOR_INDEX = "sector_index"

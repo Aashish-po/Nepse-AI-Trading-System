@@ -221,9 +221,9 @@ def _format_currency(value: float) -> str:
 
 
 def _format_percentage(value: float, decimals: int = 2) -> str:
-    """Format percentage with color indicator."""
-    color = "🟢" if value >= 0 else "🔴"
-    return f"{color} {value:+.{decimals}f}%"
+    """Format percentage with a shape + signed value so meaning survives without color."""
+    arrow = "▲" if value >= 0 else "▼"
+    return f"{arrow} {value:+.{decimals}f}%"
 
 
 def load_strategies() -> list[dict]:

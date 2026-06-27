@@ -1,19 +1,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 from app.services.data_quality import DataQualityService
 
 
-class DataQualityStatus(str, Enum):
+class DataQualityStatus(StrEnum):
     excellent = "excellent"
     warning = "warning"
     unsafe = "unsafe"
 
 
-class SystemMode(str, Enum):
+class SystemMode(StrEnum):
     normal = "NORMAL"
     degraded = "DEGRADED"
     safe_mode = "SAFE_MODE"

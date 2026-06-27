@@ -236,10 +236,10 @@ def main():
 
     # Navigation menu
     with st.sidebar:
-        st.image(
-            "https://images.unsplash.com/photo-1507679799987-c73779587ccf?ixlib=rb-4.0.3&auto=format&fit=crop&w=1470&q=80",
-            caption="NEPSE AI Trading System",
-        )
+        # ponytail: text header over a hot-linked stock photo — no external dep,
+        # works offline. Swap in st.image(local_path) if a real logo asset lands.
+        st.markdown("## 📈 NEPSE AI")
+        st.caption("AI Trading System")
         st.divider()
 
         page = option_menu(

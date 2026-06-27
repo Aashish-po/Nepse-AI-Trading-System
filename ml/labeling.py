@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 import numpy as np
 from numpy.typing import NDArray
@@ -12,7 +12,7 @@ from numpy.typing import NDArray
 logger = logging.getLogger(__name__)
 
 
-class LabelMode(str, Enum):
+class LabelMode(StrEnum):
     classification = "classification"
     regression = "regression"
 
