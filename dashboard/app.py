@@ -56,9 +56,7 @@ st.markdown(
         --text-secondary: #CBD5E1;
     }
 
-    * {
-        color: var(--text-primary);
-    }
+
 
     .main {
         background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);

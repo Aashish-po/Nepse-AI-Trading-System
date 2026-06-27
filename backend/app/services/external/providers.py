@@ -59,20 +59,6 @@ PROVIDERS: tuple[ProviderSpec, ...] = (
         "contex_dev_api_key",
         0.75,
     ),
-    ProviderSpec("polygon", "POLYGON", "market data", "polygon_enabled", "polygon_api_key", 0.85),
-    ProviderSpec(
-        "iexcloud", "IEXCLOUD", "US equities", "iexcloud_enabled", "iexcloud_api_key", 0.80
-    ),
-    ProviderSpec("coingecko", "COINGECKO", "crypto regime", "coingecko_enabled", None, 0.70),
-    ProviderSpec("fixer", "FIXER", "FX rates", "fixer_enabled", "fixer_api_key", 0.80),
-    ProviderSpec(
-        "exchangerate_host",
-        "EXCHANGERATE_HOST",
-        "FX fallback",
-        "exchangerate_host_enabled",
-        None,
-        0.70,
-    ),
 )
 
 PROVIDERS_BY_KEY: dict[str, ProviderSpec] = {p.key: p for p in PROVIDERS}
