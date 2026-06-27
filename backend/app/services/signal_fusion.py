@@ -7,7 +7,7 @@ import logging
 import os
 from dataclasses import dataclass
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 import numpy as np
@@ -18,7 +18,7 @@ from sklearn.preprocessing import StandardScaler
 logger = logging.getLogger(__name__)
 
 
-class SignalType(str, Enum):
+class SignalType(StrEnum):
     BUY = "BUY"
     SELL = "SELL"
     HOLD = "HOLD"
