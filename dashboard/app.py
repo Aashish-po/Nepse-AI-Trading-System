@@ -45,21 +45,25 @@ st.set_page_config(
 st.markdown(
     """
 <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
     :root {
-        --primary: #0F172A;
+        --primary: #081D33;
         --secondary: #1E293B;
         --accent: #0EA5E9;
         --success: #10B981;
         --warning: #F59E0B;
         --danger: #EF4444;
+        --info: #6366F1;
         --text-primary: #F8FAFC;
         --text-secondary: #CBD5E1;
+        --border: #334155;
     }
 
 
 
     .main {
-        background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
+        background: linear-gradient(135deg, #081D33 0%, #1E293B 100%);
         color: var(--text-primary);
     }
 
@@ -147,6 +151,63 @@ st.markdown(
 
     .loss {
         color: var(--danger);
+    }
+
+    /* Typography scale (§2.2) — Inter, tightened headings */
+    html, body, [class*="css"], .stMarkdown, .stButton, input, textarea, select {
+        font-family: 'Inter', sans-serif;
+    }
+    h1 { font-size: 2rem; line-height: 1.2; letter-spacing: -0.5px; font-weight: 600; }
+    h2 { font-size: 1.5rem; line-height: 1.2; letter-spacing: -0.5px; font-weight: 600; }
+    h3 { font-size: 1.25rem; line-height: 1.2; font-weight: 600; }
+
+    /* Buttons (§2.4) — primary filled accent, secondary outlined */
+    .stButton > button {
+        background: var(--accent);
+        color: var(--primary);
+        border: none;
+        border-radius: 8px;
+        font-weight: 600;
+        transition: opacity 0.15s ease;
+    }
+    .stButton > button:hover { opacity: 0.9; color: var(--primary); }
+    .stButton > button[kind="secondary"] {
+        background: transparent;
+        color: var(--accent);
+        border: 1px solid var(--accent);
+    }
+
+    /* Input fields (§2.4) — translucent slate, accent focus ring */
+    .stTextInput input, .stNumberInput input, .stDateInput input,
+    .stTextArea textarea, .stSelectbox div[data-baseweb="select"] > div {
+        background: rgba(30, 41, 59, 0.6);
+        border: 1px solid rgba(100, 116, 139, 0.2);
+        border-radius: 8px;
+    }
+    .stTextInput input:focus, .stNumberInput input:focus, .stTextArea textarea:focus {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px var(--accent);
+    }
+
+    /* Tables (§2.4) — header fill, zebra rows, accent hover */
+    .stDataFrame thead tr th { background: var(--secondary); color: var(--text-primary); }
+    .stDataFrame tbody tr:nth-child(even) { background: rgba(100, 116, 139, 0.1); }
+    .stDataFrame tbody tr:hover { background: rgba(14, 165, 233, 0.1); }
+
+    /* Tabs (§2.4) — inactive secondary text, active accent */
+    .stTabs [data-baseweb="tab"] { color: var(--text-secondary); }
+    .stTabs [aria-selected="true"] { color: var(--accent); }
+
+    /* Alerts/toasts (§2.4) — rounded, accent left rule */
+    [data-testid="stAlert"] { border-radius: 8px; border-left: 4px solid var(--accent); }
+
+    /* Loading (§2.4) — accent spinner */
+    .stSpinner > div { border-top-color: var(--accent) !important; }
+
+    /* Responsive (§3.4) — stack columns on narrow viewports */
+    @media (max-width: 640px) {
+        [data-testid="stHorizontalBlock"] { flex-direction: column; }
+        .hero h1 { font-size: 1.5rem; }
     }
 </style>
 """,
@@ -242,16 +303,30 @@ def main():
         st.caption("AI Trading System")
         st.divider()
 
-        page = option_menu(
-            "Navigation",
-            list(PAGES.keys()),
-            icons=PAGE_ICONS,
-            menu_icon="list",
-            default_index=0,
-        )
+        # Search filter (§3.1): narrow the flat 15-page menu by label substring.
+        query = st.text_input("Search pages", key="nav_search", placeholder="🔍 Filter pages…")
+        labels, icons = list(PAGES.keys()), PAGE_ICONS
+        if query:
+            filtered = [
+                (lbl, ic)
+                for lbl, ic in zip(labels, PAGE_ICONS, strict=True)
+                if query.lower() in lbl.lower()
+            ]
+            labels, icons = [f[0] for f in filtered], [f[1] for f in filtered]
 
+        if labels:
+            page = option_menu(
+                "Navigation",
+                labels,
+                icons=icons,
+                menu_icon="list",
+                default_index=0,
+            )
+        else:
+            st.caption("No pages match your search.")
+            page = None
     # Route to the selected page
-    render = PAGES.get(page)
+    render = PAGES.get(page) if page is not None else None
     if render is not None:
         render()
 

@@ -16,6 +16,7 @@ from common import (
     auth_headers,
     load_paper_accounts,
     render_hero,
+    render_table,
 )
 
 
@@ -96,13 +97,21 @@ def page_paper_trading():
 
     # --- Order entry --------------------------------------------------------
     st.subheader("Place Order")
+
+    # Preset quantities (§3.3): one click fills the qty field; "Custom" leaves it.
+    st.session_state.setdefault("pt_qty", 10)
+    qcols = st.columns(5)
+    for col, preset_qty in zip(qcols, (10, 50, 100, 500), strict=False):
+        if col.button(f"{preset_qty}", key=f"pt_qty_{preset_qty}"):
+            st.session_state["pt_qty"] = preset_qty
+
     oc1, oc2, oc3, oc4 = st.columns(4)
     with oc1:
         order_symbol = st.text_input("Symbol", value="NABIL", key="pt_symbol")
     with oc2:
         order_side = st.selectbox("Side", ["BUY", "SELL"], key="pt_side")
     with oc3:
-        order_qty = st.number_input("Quantity", min_value=1, value=10, step=1, key="pt_qty")
+        order_qty = st.number_input("Quantity", min_value=1, step=1, key="pt_qty")
     with oc4:
         order_type = st.selectbox("Type", ["MARKET", "LIMIT"], key="pt_type")
 
@@ -114,6 +123,17 @@ def page_paper_trading():
     with pc2:
         market_price = st.number_input(
             "Market price (0 = use latest)", min_value=0.0, value=0.0, step=1.0, key="pt_market"
+        )
+
+    # Order value + risk preview (§3.3): only when a price is known up front.
+    est_price = limit_price if order_type == "LIMIT" and limit_price > 0 else market_price
+    if est_price > 0:
+        order_value = order_qty * est_price
+        equity = _safe_float(summary.get("equity"))
+        risk_pct = (order_value / equity * 100) if equity > 0 else 0.0
+        st.caption(
+            f"Est. order value **{_format_currency(order_value)}** "
+            f"≈ **{risk_pct:.1f}%** of equity at Rs.{est_price:,.2f}/share."
         )
 
     if st.button("Submit Order", key="pt_submit"):
@@ -160,7 +180,10 @@ def page_paper_trading():
     except requests.RequestException as exc:
         st.error(f"Backend error: {exc}")
         trades = []
-    if trades:
-        st.dataframe(pd.DataFrame(trades), use_container_width=True, height=300)
-    else:
-        st.info("No orders yet for this account.")
+    render_table(
+        pd.DataFrame(trades),
+        key="pt_history",
+        name=f"orders_{account_id}",
+        height=300,
+        empty_msg="No orders yet for this account.",
+    )

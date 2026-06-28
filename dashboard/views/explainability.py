@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import pandas as pd
+import plotly.graph_objects as go
 import requests  # type: ignore[import-untyped]
 import streamlit as st
 from common import (
     API_BASE,
     _safe_list,
+    render_table,
 )
 
 
@@ -30,11 +32,29 @@ def page_explainability():
             if res.status_code == 200:
                 data = res.json()
                 st.caption(f"Method: {data.get('method')}")
-                importances = _safe_list(data.get("importances"))
-                if importances:
-                    df = pd.DataFrame(importances)
-                    st.bar_chart(df.set_index("feature")["contribution"])
-                    st.dataframe(df, use_container_width=True)
+                df = pd.DataFrame(_safe_list(data.get("importances")))
+                if not df.empty:
+                    df = df.sort_values(
+                        "contribution",
+                        key=lambda s: s.abs(),
+                        ascending=False,
+                    )
+                    # Waterfall of feature contributions (§ Week 9) — inherits theme.
+                    fig = go.Figure(
+                        go.Waterfall(
+                            orientation="v",
+                            x=df["feature"].astype(str).tolist(),
+                            y=df["contribution"].tolist(),
+                            connector={"line": {"color": "rgba(100,116,139,0.4)"}},
+                        )
+                    )
+                    fig.update_layout(title="Feature Contributions", yaxis_title="Contribution")
+                    st.plotly_chart(fig, use_container_width=True)
+                render_table(
+                    df,
+                    key=f"explain_imp_{model_id}",
+                    name=f"importance_{model_id}",
+                )
             elif res.status_code == 404:
                 st.warning("Model not found.")
             else:

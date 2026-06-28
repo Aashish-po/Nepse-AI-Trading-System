@@ -6,6 +6,7 @@ import streamlit as st
 from common import (
     API_BASE,
     _safe_list,
+    render_table,
 )
 
 
@@ -39,10 +40,12 @@ def page_mlops():
             res = requests.get(f"{API_BASE}/mlops/rank?metric={metric}", timeout=10)
             if res.status_code == 200:
                 models = _safe_list(res.json().get("models"))
-                if models:
-                    st.dataframe(pd.DataFrame(models), use_container_width=True)
-                else:
-                    st.info("No ranked models.")
+                render_table(
+                    pd.DataFrame(models),
+                    key="mlops_rank",
+                    name=f"ranking_{metric}",
+                    empty_msg="No ranked models.",
+                )
             else:
                 st.warning("Ranking unavailable.")
         except requests.RequestException as exc:

@@ -97,27 +97,51 @@ def page_market_overview():
             df_quality = pd.DataFrame(quality_data["quality_by_symbol"])
             if not df_quality.empty:
                 st.subheader("Quality by Symbol")
-                st.dataframe(df_quality, use_container_width=True, height=300)
+                # Render score columns as inline progress bars (native mini-chart, §1.1).
+                score_cols = [
+                    c for c in df_quality.columns if "score" in c.lower() or "rate" in c.lower()
+                ]
+                col_config = {
+                    c: st.column_config.ProgressColumn(
+                        c, min_value=0.0, max_value=1.0, format="%.2f"
+                    )
+                    for c in score_cols
+                    if pd.api.types.is_numeric_dtype(df_quality[c])
+                    and df_quality[c].dropna().between(0, 1).all()
+                }
+                st.dataframe(
+                    df_quality, use_container_width=True, height=300, column_config=col_config
+                )
     else:
         st.warning("Quality report unavailable.")
 
     st.divider()
 
-    # Per-symbol trust score lookup
-    st.subheader("🎯 Per-Symbol Trust Score")
+    st.session_state.setdefault("trust_symbol", "NABIL")
+    st.session_state.setdefault("trust_recent", [])
+    recent = st.session_state["trust_recent"]
+    if recent:
+        picked = st.selectbox("Recent lookups", ["—", *recent], key="trust_recent_pick")
+        if picked != "—":
+            st.session_state["trust_symbol"] = picked
+
     col1, col2 = st.columns(2)
-
     with col1:
-        lookup_symbol = st.text_input("Symbol", value="NABIL", key="trust_symbol")
-
+        lookup_symbol = st.text_input("Symbol", key="trust_symbol")
     with col2:
-        lookup_date = st.text_input(
-            "Date (YYYY-MM-DD)", value=dt.date.today().isoformat(), key="trust_date"
-        )
+        _lookup_date = st.date_input("Date", value=dt.date.today(), key="trust_date")
+        lookup_date = _lookup_date.isoformat() if isinstance(_lookup_date, dt.date) else ""
 
     if st.button("Fetch Trust Score", key="fetch_trust"):
-        trust = get_trust_score(lookup_symbol, lookup_date)
+        sym = lookup_symbol.strip().upper()
+        if sym:
+            if sym in recent:
+                recent.remove(sym)
+            recent.insert(0, sym)
+            del recent[8:]  # keep the 8 most recent
+        trust = get_trust_score(sym, lookup_date)
         trust_data = _safe_dict(trust)
+
         if trust_data:
             col1, col2, col3 = st.columns(3)
             with col1:
