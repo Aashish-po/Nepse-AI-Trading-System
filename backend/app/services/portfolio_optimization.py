@@ -186,7 +186,7 @@ class PortfolioOptimizationService:
                                 "type": "ineq",
                                 "fun": lambda x,
                                 idx=sector_indices,
-                                mse=constraints.max_sector_exposure: mse - sum(x[i] for i in idx),
+                                mse=constraints.max_sector_exposure: (mse - sum(x[i] for i in idx)),
                             }
                         )
 

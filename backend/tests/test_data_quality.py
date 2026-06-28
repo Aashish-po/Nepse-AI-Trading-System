@@ -168,7 +168,7 @@ def test_warning_zone_classification(db_session: Session) -> None:
 
 def test_rolling_volume_anomaly(db_session: Session) -> None:
     for i in range(25):
-        _seed_price(db_session, "ROLL", f"2024-06-{i+1:02d}", close=100.0, volume=1000)
+        _seed_price(db_session, "ROLL", f"2024-06-{i + 1:02d}", close=100.0, volume=1000)
     _seed_price(db_session, "ROLL", "2024-06-26", close=100.0, volume=10000000)
 
     service = DataQualityService(session=db_session)
