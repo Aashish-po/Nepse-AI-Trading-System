@@ -7,6 +7,7 @@ from common import (
     API_BASE,
     _format_percentage,
     _safe_list,
+    render_table,
 )
 
 
@@ -62,11 +63,13 @@ def page_analytics():
             if res.status_code == 200:
                 data = res.json()
                 st.json(data.get("summary", {}))
-                signals = _safe_list(data.get("signals"))
-                if signals:
-                    st.dataframe(pd.DataFrame(signals), use_container_width=True, height=350)
-                else:
-                    st.info("No signals match the filters.")
+                render_table(
+                    pd.DataFrame(_safe_list(data.get("signals"))),
+                    key="an_signals",
+                    name="analytics_signals",
+                    height=350,
+                    empty_msg="No signals match the filters.",
+                )
             else:
                 st.warning("Signal explorer unavailable.")
         except requests.RequestException as exc:

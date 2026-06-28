@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-import math
+import statistics
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
@@ -320,7 +320,7 @@ class DataQualityService:
             recent_7 = scores[:7] if len(scores) >= 7 else scores
             avg_7d = sum(recent_7) / len(recent_7) if recent_7 else 0.0
             unsafe_pct = sum(1 for s in scores if s < 0.7) / len(scores)
-            std_dev = self._std_dev(scores)
+            std_dev = statistics.pstdev(scores) if len(scores) >= 2 else 0.0
 
             return {
                 "symbol": symbol.upper(),
@@ -335,13 +335,6 @@ class DataQualityService:
         finally:
             if owns_session:
                 session.close()
-
-    def _std_dev(self, values: list[float]) -> float:
-        if len(values) < 2:
-            return 0.0
-        mean = sum(values) / len(values)
-        variance = sum((v - mean) ** 2 for v in values) / len(values)
-        return math.sqrt(variance)
 
     def check_data_freshness(
         self, symbol: str, target_date: str, expected_hours: float = 16.0
@@ -995,8 +988,7 @@ class DataQualityService:
         mean = sum(volumes) / len(volumes)
         if mean <= 0:
             return False, int(price.volume), 0.0, 0.0
-        variance = sum((v - mean) ** 2 for v in volumes) / len(volumes)
-        std = math.sqrt(variance)
+        std = statistics.pstdev(volumes)
         if std == 0:
             is_anomaly = abs(price.volume - mean) / mean > 0.5
             z_score = abs(price.volume - mean) / mean if mean > 0 else 0.0

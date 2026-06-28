@@ -122,3 +122,8 @@ agenda.md
 Architecture.md
 AGENTS.md
 Documents/
+
+# Node.js (headroom-ai experiment — local only, not part of the Python app)
+node_modules/
+package.json
+package-lock.json

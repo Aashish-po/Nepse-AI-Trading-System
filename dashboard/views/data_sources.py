@@ -4,6 +4,7 @@ import pandas as pd
 import streamlit as st
 from common import (
     load_data_sources,
+    render_table,
 )
 
 
@@ -13,7 +14,10 @@ def page_data_sources():
     st.header("📡 Data Sources")
 
     sources = load_data_sources()
-    if sources:
-        st.dataframe(pd.DataFrame(sources), use_container_width=True, height=300)
-    else:
-        st.info("No data source history available.")
+    render_table(
+        pd.DataFrame(sources),
+        key="data_sources",
+        name="data_sources",
+        height=300,
+        empty_msg="No data source history available.",
+    )

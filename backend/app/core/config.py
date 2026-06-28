@@ -10,93 +10,38 @@ DEFAULT_SECRET_KEY = "change_me_in_local_env"
 
 
 class Settings(BaseSettings):
+    # case_sensitive defaults to False, so env vars map to field names regardless
+    # of case (APP_ENV -> app_env). Only providers whose env var name differs from
+    # the field name need an explicit validation_alias (see contex_dev_* below).
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-    app_env: Literal["local", "test", "dev", "prod"] = Field(
-        default="local",
-        validation_alias=AliasChoices("APP_ENV", "app_env"),
-    )
-    app_name: str = Field(
-        default="NEPSE AI Trading Research Platform",
-        validation_alias=AliasChoices("APP_NAME", "app_name"),
-    )
-    app_version: str = Field(
-        default="0.1.0",
-        validation_alias=AliasChoices("APP_VERSION", "app_version"),
-    )
+    app_env: Literal["local", "test", "dev", "prod"] = "local"
+    app_name: str = "NEPSE AI Trading Research Platform"
+    app_version: str = "0.1.0"
 
-    secret_key: str = Field(
-        default=DEFAULT_SECRET_KEY,
-        validation_alias=AliasChoices("SECRET_KEY", "secret_key"),
-    )
-    access_token_expire_minutes: int = Field(
-        default=60,
-        validation_alias=AliasChoices("ACCESS_TOKEN_EXPIRE_MINUTES", "access_token_expire_minutes"),
-    )
+    secret_key: str = DEFAULT_SECRET_KEY
+    access_token_expire_minutes: int = 60
 
-    database_url: str = Field(
-        default="sqlite:///./nepse_ai.db",
-        validation_alias=AliasChoices("DATABASE_URL", "database_url"),
-    )
-    database_pool_size: int = Field(
-        default=10,
-        validation_alias=AliasChoices("DATABASE_POOL_SIZE", "database_pool_size"),
-    )
+    database_url: str = "sqlite:///./nepse_ai.db"
+    database_pool_size: int = 10
     database_connect_timeout: int = Field(
         default=2,
-        validation_alias=AliasChoices("DATABASE_CONNECT_TIMEOUT", "database_connect_timeout"),
         description="Seconds to wait for a (non-SQLite) DB connection before failing fast.",
     )
-    redis_url: str = Field(
-        default="redis://localhost:6379/0",
-        validation_alias=AliasChoices("REDIS_URL", "redis_url"),
-    )
-    mlflow_enabled: bool = Field(
-        default=True,
-        validation_alias=AliasChoices("MLFLOW_ENABLED", "mlflow_enabled"),
-    )
-    mlflow_tracking_uri: str = Field(
-        default="file:./mlruns",
-        validation_alias=AliasChoices("MLFLOW_TRACKING_URI", "mlflow_tracking_uri"),
-    )
-    mlflow_experiment_prefix: str = Field(
-        default="",
-        validation_alias=AliasChoices("MLFLOW_EXPERIMENT_PREFIX", "mlflow_experiment_prefix"),
-    )
+    redis_url: str = "redis://localhost:6379/0"
+    mlflow_enabled: bool = True
+    mlflow_tracking_uri: str = "file:./mlruns"
+    mlflow_experiment_prefix: str = ""
 
-    nepse_primary_data_source_url: str = Field(
-        default="",
-        validation_alias=AliasChoices(
-            "NEPSE_PRIMARY_DATA_SOURCE_URL",
-            "nepse_primary_data_source_url",
-        ),
-    )
-    nepse_backup_data_source_url: str = Field(
-        default="",
-        validation_alias=AliasChoices(
-            "NEPSE_BACKUP_DATA_SOURCE_URL",
-            "nepse_backup_data_source_url",
-        ),
-    )
-    data_trust_score_minimum: float = Field(
-        default=0.90,
-        validation_alias=AliasChoices("DATA_TRUST_SCORE_MINIMUM", "data_trust_score_minimum"),
-    )
+    nepse_primary_data_source_url: str = ""
+    nepse_backup_data_source_url: str = ""
+    data_trust_score_minimum: float = 0.90
 
-    calendarific_api_key: str = Field(
-        default="",
-        validation_alias=AliasChoices("CALENDARIFIC_API_KEY", "calendarific_api_key"),
-    )
-    calendarific_country: str = Field(
-        default="NP",
-        validation_alias=AliasChoices("CALENDARIFIC_COUNTRY", "calendarific_country"),
-    )
+    calendarific_api_key: str = ""
+    calendarific_country: str = "NP"
     # When True, only national/public holidays close the market (Calendarific
     # returns many observance/season entries that NEPSE does not close for).
-    calendarific_national_only: bool = Field(
-        default=False,
-        validation_alias=AliasChoices("CALENDARIFIC_NATIONAL_ONLY", "calendarific_national_only"),
-    )
+    calendarific_national_only: bool = False
 
     # External research-data providers (advisory only; never trigger live trading)
     # All providers are OPT-IN. Leaving keys blank and *_ENABLED=false means the
@@ -104,122 +49,44 @@ class Settings(BaseSettings):
     # key. Do NOT commit real keys.
 
     # Set true ONLY to run opt-in live integration tests against real providers.
-    external_api_live_tests: bool = Field(
-        default=False,
-        validation_alias=AliasChoices("EXTERNAL_API_LIVE_TESTS", "external_api_live_tests"),
-    )
+    external_api_live_tests: bool = False
 
     # FRED — macro series (rates, inflation, unemployment, GDP)
-    fred_enabled: bool = Field(
-        default=False,
-        validation_alias=AliasChoices("FRED_ENABLED", "fred_enabled"),
-    )
-    fred_base_url: str = Field(
-        default="https://api.stlouisfed.org",
-        validation_alias=AliasChoices("FRED_BASE_URL", "fred_base_url"),
-    )
-    fred_api_key: str = Field(
-        default="",
-        validation_alias=AliasChoices("FRED_API_KEY", "fred_api_key"),
-    )
-    fred_rate_limit_per_minute: int = Field(
-        default=60,
-        validation_alias=AliasChoices("FRED_RATE_LIMIT_PER_MINUTE", "fred_rate_limit_per_minute"),
-    )
-    fred_default_series: str = Field(
-        default="DGS10,DGS2,DFF,CPIAUCSL,UNRATE,GDP",
-        validation_alias=AliasChoices("FRED_DEFAULT_SERIES", "fred_default_series"),
-    )
+    fred_enabled: bool = False
+    fred_base_url: str = "https://api.stlouisfed.org"
+    fred_api_key: str = ""
+    fred_rate_limit_per_minute: int = 60
+    fred_default_series: str = "DGS10,DGS2,DFF,CPIAUCSL,UNRATE,GDP"
 
     # NewsAPI — financial headlines for sentiment
-    newsapi_enabled: bool = Field(
-        default=False,
-        validation_alias=AliasChoices("NEWSAPI_ENABLED", "newsapi_enabled"),
-    )
-    newsapi_base_url: str = Field(
-        default="https://newsapi.org",
-        validation_alias=AliasChoices("NEWSAPI_BASE_URL", "newsapi_base_url"),
-    )
-    newsapi_api_key: str = Field(
-        default="",
-        validation_alias=AliasChoices("NEWSAPI_API_KEY", "newsapi_api_key"),
-    )
-    newsapi_rate_limit_per_minute: int = Field(
-        default=30,
-        validation_alias=AliasChoices(
-            "NEWSAPI_RATE_LIMIT_PER_MINUTE", "newsapi_rate_limit_per_minute"
-        ),
-    )
+    newsapi_enabled: bool = False
+    newsapi_base_url: str = "https://newsapi.org"
+    newsapi_api_key: str = ""
+    newsapi_rate_limit_per_minute: int = 30
 
     # Hugging Face — optional hosted NLP enrichment
-    huggingface_enabled: bool = Field(
-        default=False,
-        validation_alias=AliasChoices("HUGGINGFACE_ENABLED", "huggingface_enabled"),
-    )
-    huggingface_api_key: str = Field(
-        default="",
-        validation_alias=AliasChoices("HUGGINGFACE_API_KEY", "huggingface_api_key"),
-    )
-    huggingface_base_url: str = Field(
-        default="https://api-inference.huggingface.co",
-        validation_alias=AliasChoices("HUGGINGFACE_BASE_URL", "huggingface_base_url"),
-    )
-    huggingface_model: str = Field(
-        default="cardiffnlp/twitter-xlm-roberta-base-sentiment",
-        validation_alias=AliasChoices("HUGGINGFACE_MODEL", "huggingface_model"),
-    )
-    huggingface_rate_limit_per_minute: int = Field(
-        default=30,
-        validation_alias=AliasChoices(
-            "HUGGINGFACE_RATE_LIMIT_PER_MINUTE", "huggingface_rate_limit_per_minute"
-        ),
-    )
+    huggingface_enabled: bool = False
+    huggingface_api_key: str = ""
+    huggingface_base_url: str = "https://api-inference.huggingface.co"
+    huggingface_model: str = "cardiffnlp/twitter-xlm-roberta-base-sentiment"
+    huggingface_rate_limit_per_minute: int = 30
 
     # Marketstack — global OHLCV / benchmark context
-    marketstack_enabled: bool = Field(
-        default=False,
-        validation_alias=AliasChoices("MARKETSTACK_ENABLED", "marketstack_enabled"),
-    )
-    marketstack_api_key: str = Field(
-        default="",
-        validation_alias=AliasChoices("MARKETSTACK_API_KEY", "marketstack_api_key"),
-    )
-    marketstack_base_url: str = Field(
-        default="https://api.marketstack.com",
-        validation_alias=AliasChoices("MARKETSTACK_BASE_URL", "marketstack_base_url"),
-    )
-    marketstack_rate_limit_per_minute: int = Field(
-        default=30,
-        validation_alias=AliasChoices(
-            "MARKETSTACK_RATE_LIMIT_PER_MINUTE", "marketstack_rate_limit_per_minute"
-        ),
-    )
+    marketstack_enabled: bool = False
+    marketstack_api_key: str = ""
+    marketstack_base_url: str = "https://api.marketstack.com"
+    marketstack_rate_limit_per_minute: int = 30
 
     # Finnhub — candles, fundamentals, earnings
-    finnhub_enabled: bool = Field(
-        default=False,
-        validation_alias=AliasChoices("FINNHUB_ENABLED", "finnhub_enabled"),
-    )
-    finnhub_api_key: str = Field(
-        default="",
-        validation_alias=AliasChoices("FINNHUB_API_KEY", "finnhub_api_key"),
-    )
-    finnhub_base_url: str = Field(
-        default="https://finnhub.io",
-        validation_alias=AliasChoices("FINNHUB_BASE_URL", "finnhub_base_url"),
-    )
-    finnhub_rate_limit_per_minute: int = Field(
-        default=30,
-        validation_alias=AliasChoices(
-            "FINNHUB_RATE_LIMIT_PER_MINUTE", "finnhub_rate_limit_per_minute"
-        ),
-    )
+    finnhub_enabled: bool = False
+    finnhub_api_key: str = ""
+    finnhub_base_url: str = "https://finnhub.io"
+    finnhub_rate_limit_per_minute: int = 30
 
-    # Context.dev — enriched market context / entity extraction
-    contex_dev_enabled: bool = Field(
-        default=False,
-        validation_alias=AliasChoices("CONTEX_DEV_ENABLED", "contex_dev_enabled"),
-    )
+    # Context.dev — enriched market context / entity extraction.
+    # Key/base-url env vars use provider-specific names that differ from the field
+    # name, so these two keep an explicit validation_alias.
+    contex_dev_enabled: bool = False
     contex_dev_api_key: str = Field(
         default="",
         validation_alias=AliasChoices("CONTEX.DEV", "contex_dev_api_key"),
@@ -235,8 +102,7 @@ class Settings(BaseSettings):
         # for local/test work; refuse to boot a dev/prod app without a real key.
         if self.app_env in ("dev", "prod") and self.secret_key == DEFAULT_SECRET_KEY:
             raise ValueError(
-                "SECRET_KEY must be set to a non-default value when APP_ENV is "
-                f"'{self.app_env}'."
+                f"SECRET_KEY must be set to a non-default value when APP_ENV is '{self.app_env}'."
             )
         return self
 

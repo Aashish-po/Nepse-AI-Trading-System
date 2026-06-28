@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import numpy as np
+import pandas as pd
 
 
 def compute_rsi(prices: Any, period: int = 14) -> np.ndarray:
@@ -18,11 +19,9 @@ def compute_rsi(prices: Any, period: int = 14) -> np.ndarray:
     gains = np.where(delta > 0, delta, 0)
     losses = np.where(delta < 0, -delta, 0)
 
-    avg_gain = np.asarray(
-        __import__("pandas").Series(gains).rolling(window=period, min_periods=period).mean().values
-    )
+    avg_gain = np.asarray(pd.Series(gains).rolling(window=period, min_periods=period).mean().values)
     avg_loss = np.asarray(
-        __import__("pandas").Series(losses).rolling(window=period, min_periods=period).mean().values
+        pd.Series(losses).rolling(window=period, min_periods=period).mean().values
     )
 
     with np.errstate(divide="ignore", invalid="ignore"):
@@ -41,9 +40,7 @@ def compute_rsi(prices: Any, period: int = 14) -> np.ndarray:
 def compute_sma(values: Any, period: int = 20) -> np.ndarray:
     """Compute Simple Moving Average."""
     values = np.asarray(values, dtype=np.float64)
-    sma = np.asarray(
-        __import__("pandas").Series(values).rolling(window=period, min_periods=period).mean().values
-    )
+    sma = np.asarray(pd.Series(values).rolling(window=period, min_periods=period).mean().values)
     return sma
 
 
@@ -51,11 +48,7 @@ def compute_ema(values: Any, period: int = 20) -> np.ndarray:
     """Compute Exponential Moving Average."""
     values = np.asarray(values, dtype=np.float64)
     ema = np.asarray(
-        __import__("pandas")
-        .Series(values)
-        .ewm(span=period, adjust=False, min_periods=period)
-        .mean()
-        .values
+        pd.Series(values).ewm(span=period, adjust=False, min_periods=period).mean().values
     )
     return ema
 
@@ -102,9 +95,7 @@ def compute_atr(
     tr = np.maximum(high - low, np.abs(high - prev_close))
     tr = np.maximum(tr, np.abs(low - prev_close))
 
-    atr = np.asarray(
-        __import__("pandas").Series(tr).rolling(window=period, min_periods=period).mean().values
-    )
+    atr = np.asarray(pd.Series(tr).rolling(window=period, min_periods=period).mean().values)
 
     return atr
 
@@ -123,9 +114,7 @@ def compute_returns(prices: Any) -> np.ndarray:
 def compute_volatility(values: Any, period: int = 20) -> np.ndarray:
     """Compute rolling standard deviation (volatility)."""
     values = np.asarray(values, dtype=np.float64)
-    return np.asarray(
-        __import__("pandas").Series(values).rolling(window=period, min_periods=period).std().values
-    )
+    return np.asarray(pd.Series(values).rolling(window=period, min_periods=period).std().values)
 
 
 def compute_volume_ratio(

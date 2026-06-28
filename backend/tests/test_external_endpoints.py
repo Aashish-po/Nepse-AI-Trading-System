@@ -32,7 +32,7 @@ def test_macro_series_and_observations_endpoints(client, db_session) -> None:
             return httpx.Response(200, json={"seriess": [{"title": "10Y"}]})
         return httpx.Response(200, json={"observations": [{"date": "2024-01-01", "value": "4.0"}]})
 
-    cfg = Settings(_env_file=None, FRED_ENABLED=True, FRED_API_KEY="k")  # type: ignore[call-arg]
+    cfg = Settings(_env_file=None, fred_enabled=True, fred_api_key="k")  # type: ignore[call-arg]
     fred = FredClient(cfg, client=httpx.Client(transport=httpx.MockTransport(handler)))
     MacroIngestionService(cfg, session=db_session, client=fred).run(
         ["DGS10"], today=date(2024, 6, 1)

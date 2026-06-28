@@ -21,6 +21,7 @@ from common import (
     _valid_strategies,
     compare_benchmark,
     load_strategies,
+    render_table,
     run_backtest,
 )
 
@@ -41,31 +42,54 @@ def page_backtesting():
     # Sidebar configuration
     st.sidebar.header("⚙️ Backtest Config")
 
+    # Presets (§3.3): pick a risk profile to fill commission/slippage/delay; values
+    # stay editable afterwards. Applied by writing the widgets' session_state keys.
+    presets = {
+        "Custom": {},
+        "Conservative": {"bt_commission": 0.005, "bt_slippage": 10.0, "bt_exec": 2},
+        "Balanced": {"bt_commission": 0.004, "bt_slippage": 5.0, "bt_exec": 1},
+        "Aggressive": {"bt_commission": 0.003, "bt_slippage": 2.0, "bt_exec": 0},
+    }
+    for k, v in {"bt_commission": 0.005, "bt_slippage": 5.0, "bt_exec": 1}.items():
+        st.session_state.setdefault(k, v)
+    preset = st.sidebar.selectbox("Preset", list(presets), key="bt_preset")
+    if preset == "Custom":
+        st.session_state["_bt_applied"] = None
+    elif st.session_state.get("_bt_applied") != preset:
+        # Type hint for mypy: st.session_state.update expects a mapping-like value.
+        st.session_state.update(presets[preset])  # type: ignore[arg-type]
+
+        st.session_state["_bt_applied"] = preset
     initial_capital = st.sidebar.number_input(
-        "Initial Capital (Rs.)", value=1000000, step=100000, help="Starting portfolio value"
+        "Initial Capital (Rs.)",
+        value=1000000,
+        step=100000,
+        min_value=1,
+        key="bt_capital",
+        help="Starting portfolio value",
     )
 
     commission = st.sidebar.number_input(
         "Commission Rate",
-        value=0.005,
         step=0.0001,
         min_value=0.0,
+        key="bt_commission",
         help="Transaction cost as decimal (0.005 = 0.5%)",
     )
 
     slippage = st.sidebar.number_input(
         "Slippage (bps)",
-        value=5.0,
         step=1.0,
         min_value=0.0,
+        key="bt_slippage",
         help="Execution slippage in basis points",
     )
 
     execution_delay = st.sidebar.number_input(
         "Execution Delay (bars)",
-        value=1,
         step=1,
         min_value=0,
+        key="bt_exec",
         help="Bars to delay signal execution",
     )
 
@@ -93,8 +117,19 @@ def page_backtesting():
         "Benchmark Symbol", value="NABIL", help="Symbol for buy-and-hold comparison"
     )
 
+    # Inline validation (§3.3): block the run when the date range is inverted.
+    invalid_range = (
+        isinstance(start_date, dt.date)
+        and isinstance(end_date, dt.date)
+        and (start_date >= end_date)
+    )
+    if invalid_range:
+        st.sidebar.error("Start date must be before end date.")
+
     # Run backtest
-    run_button = st.sidebar.button("🚀 Run Backtest", use_container_width=True)
+    run_button = st.sidebar.button(
+        "🚀 Run Backtest", use_container_width=True, disabled=invalid_range
+    )
 
     if run_button:
         if not strategies:
@@ -191,7 +226,9 @@ def page_backtesting():
         col8.metric(
             "Winning Trades",
             num_winners,
-            help=f"{(num_winners/total_trades*100):.1f}% of trades" if total_trades > 0 else "N/A",
+            help=f"{(num_winners / total_trades * 100):.1f}% of trades"
+            if total_trades > 0
+            else "N/A",
         )
 
         st.divider()
@@ -225,10 +262,9 @@ def page_backtesting():
                     xaxis_title="Date",
                     yaxis_title="Equity (Rs.)",
                     hovermode="x unified",
-                    plot_bgcolor="rgba(0,0,0,0)",
-                    paper_bgcolor="rgba(0,0,0,0)",
-                    font=dict(color="#F8FAFC"),
                 )
+                # Range slider for zoom/pan over the date axis (§3.3).
+                fig_equity.update_xaxes(rangeslider_visible=True)
                 st.plotly_chart(fig_equity, use_container_width=True)
         else:
             st.info("No equity curve data available.")
@@ -269,13 +305,14 @@ def page_backtesting():
 
         st.divider()
 
-        # Trades table
+        # Trades table — searchable + exportable (§3.3 inline actions).
         st.subheader("📋 Trade Details")
-        if trades:
-            df_trades = pd.DataFrame(trades)
-            st.dataframe(df_trades, use_container_width=True, height=400)
-        else:
-            st.info("No trades executed.")
+        render_table(
+            pd.DataFrame(trades),
+            key="bt_trades",
+            name="trades",
+            empty_msg="No trades executed.",
+        )
 
         st.divider()
 

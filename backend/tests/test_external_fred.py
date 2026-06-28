@@ -10,7 +10,7 @@ from app.services.external.fred import FredClient, _parse_value
 
 
 def _cfg() -> Settings:
-    return Settings(_env_file=None, FRED_ENABLED=True, FRED_API_KEY="testkey")  # type: ignore[call-arg]
+    return Settings(_env_file=None, fred_enabled=True, fred_api_key="testkey")  # type: ignore[call-arg]
 
 
 def _client(handler) -> FredClient:

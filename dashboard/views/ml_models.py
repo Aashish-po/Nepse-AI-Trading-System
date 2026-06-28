@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime as dt
 
+import pandas as pd
 import requests  # type: ignore[import-untyped]
 import streamlit as st
 from common import (
@@ -137,6 +138,17 @@ def page_ml_models():
         if response.status_code == 200:
             models = response.json().get("models", [])
             if models:
+                # Side-by-side comparison (§ Week 9): flatten name/status + metrics.
+                comparison = [
+                    {
+                        "name": m.get("name", "—"),
+                        "status": m.get("status", "—"),
+                        **{k: v for k, v in (m.get("metrics") or {}).items()},
+                    }
+                    for m in models
+                ]
+                st.dataframe(pd.DataFrame(comparison), use_container_width=True)
+                st.caption("Per-model detail:")
                 for model in models:
                     with st.expander(
                         f"{model.get('name', 'Unknown')} ({model.get('status', 'unknown')})"

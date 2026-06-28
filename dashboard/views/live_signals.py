@@ -7,13 +7,14 @@ from common import (
     fetch_live_signal_ws,
     load_live_signal_snapshot,
     render_hero,
+    render_table,
 )
 
 try:
     # Optional websocket dependency; common.fetch_live_signal_ws handles None.
     from websocket import create_connection  # type: ignore[import-untyped]
 except Exception:  # pragma: no cover - optional dependency
-    create_connection = None
+    create_connection = None  # type: ignore[assignment]
 
 
 def page_live_signals():
@@ -39,8 +40,10 @@ def page_live_signals():
             st.json(snapshot.get("subscription", {}))
         else:
             rows = _safe_list(snapshot.get("rows"))
-            if rows:
-                df = pd.DataFrame(rows)
-                st.dataframe(df, use_container_width=True, height=240)
-            else:
-                st.info("No recent signal rows found.")
+            render_table(
+                pd.DataFrame(rows),
+                key="live_signals",
+                name=f"live_{symbol}",
+                height=240,
+                empty_msg="No recent signal rows found.",
+            )

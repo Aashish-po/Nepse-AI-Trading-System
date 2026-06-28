@@ -13,12 +13,33 @@ from typing import Any
 
 import pandas as pd
 import plotly.graph_objects as go
+import plotly.io as pio
 import requests  # type: ignore[import-untyped]
 import streamlit as st
 
 API_BASE = st.secrets.get("API_BASE", "http://127.0.0.1:8000")
 EXPORT_DIR = Path("exports")
 EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+
+# Shared Plotly theme (plan §3.2). Registered once and set as the default so every
+# go.Figure() across the views inherits it; per-figure update_layout still wins for
+# titles/axes. Composed on top of plotly_dark for sane base defaults.
+# ponytail: one template here beats editing update_layout in every view module.
+_GRID = "rgba(100, 116, 139, 0.2)"  # slate-500 @ 20%
+pio.templates["nepse"] = go.layout.Template(
+    layout=dict(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="Inter, sans-serif", color="#CBD5E1"),  # --text-secondary
+        colorway=["#0EA5E9", "#10B981", "#EF4444", "#F59E0B", "#6366F1"],  # accent→info
+        xaxis=dict(gridcolor=_GRID, zerolinecolor=_GRID, linecolor="#334155"),
+        yaxis=dict(gridcolor=_GRID, zerolinecolor=_GRID, linecolor="#334155"),
+        hoverlabel=dict(
+            bgcolor="rgba(15, 23, 42, 0.9)", bordercolor="#0EA5E9", font=dict(color="#F8FAFC")
+        ),
+    )
+)
+pio.templates.default = "plotly_dark+nepse"
 
 
 def auth_headers() -> dict[str, str]:
@@ -41,6 +62,38 @@ def render_hero(title: str, subtitle: str) -> None:
         </div>
         """,
         unsafe_allow_html=True,
+    )
+
+
+def render_table(
+    df: pd.DataFrame,
+    key: str,
+    *,
+    name: str = "data",
+    height: int = 400,
+    empty_msg: str = "No data.",
+) -> None:
+    """Searchable, exportable dataframe (plan §3.2 / Phase 3 filtering).
+
+    Column-click sorting is already native to ``st.dataframe``; this adds a
+    substring row filter and a CSV download. Reused by the table-heavy views
+    (signals, alerts, analytics, data sources, mlops, live signals).
+    """
+    if df is None or df.empty:
+        st.info(empty_msg)
+        return
+    query = st.text_input("Filter rows", key=f"{key}_filter", placeholder="🔍 Filter…")
+    if query:
+        mask = df.astype(str).apply(
+            lambda row: row.str.contains(query, case=False, regex=False).any(), axis=1
+        )
+        df = df[mask]
+        if df.empty:
+            st.info(f'No rows match "{query}".')
+            return
+    st.dataframe(df, use_container_width=True, height=height)
+    st.download_button(
+        "📥 CSV", _csv_bytes(df), file_name=f"{name}.csv", mime="text/csv", key=f"{key}_dl"
     )
 
 
@@ -128,17 +181,6 @@ def require_backend_or_safe_mode() -> bool:
         st.error("Backend unavailable (GET /health failed). Please start backend API.")
         return False
     return True
-
-
-def _parse_date(s: str) -> str:
-    """Validate ISO date format."""
-    dt.date.fromisoformat(s)
-    return s
-
-
-def _parse_float(s: str) -> float:
-    """Validate float conversion."""
-    return float(s) if s else 0.0
 
 
 def _safe_int(value: object, default: int = -1) -> int:

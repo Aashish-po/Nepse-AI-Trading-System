@@ -302,8 +302,7 @@ def explain_trade(
         reasons.append(f"{c.feature} (={c.value:.4g}) {verb} the {direction} call")
 
     summary = (
-        f"{direction} signal for {symbol} ({signal_type}). "
-        f"Top drivers: " + "; ".join(reasons) + "."
+        f"{direction} signal for {symbol} ({signal_type}). Top drivers: " + "; ".join(reasons) + "."
     )
     if confidence is not None:
         summary += f" Model confidence: {confidence:.1%}."

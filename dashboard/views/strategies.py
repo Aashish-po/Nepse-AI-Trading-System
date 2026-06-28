@@ -7,6 +7,7 @@ from common import (
     _strategy_label,
     _valid_strategies,
     load_strategies,
+    render_table,
 )
 
 
@@ -57,11 +58,12 @@ def page_strategies():
 
         # Backtests history
         st.subheader("📈 Recent Backtests")
-        if "recent_backtests" in strategy:
-            df_backtests = pd.DataFrame(strategy["recent_backtests"])
-            st.dataframe(df_backtests, use_container_width=True)
-        else:
-            st.info("No backtests recorded yet.")
+        render_table(
+            pd.DataFrame(strategy.get("recent_backtests", [])),
+            key="strat_backtests",
+            name=f"backtests_{strategy.get('id')}",
+            empty_msg="No backtests recorded yet.",
+        )
 
         # Parameters
         st.subheader("📊 Strategy Parameters")

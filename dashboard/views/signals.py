@@ -7,6 +7,7 @@ import plotly.graph_objects as go
 import streamlit as st
 from common import (
     load_signals,
+    render_table,
 )
 
 
@@ -23,7 +24,7 @@ def page_signals():
         signals = load_signals(signals_date)
         if signals:
             df_signals = pd.DataFrame(signals)
-            st.dataframe(df_signals, use_container_width=True, height=400)
+            render_table(df_signals, key="signals", name=f"signals_{signals_date}")
 
             # Signal distribution chart
             if "signal_type" in df_signals.columns:
