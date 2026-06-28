@@ -1,5 +1,6 @@
 # backend/app/db/session.py
-from collections.abc import Generator
+from collections.abc import Generator, Iterator
+from contextlib import contextmanager
 from typing import Any
 
 from app.core.config import settings
@@ -33,3 +34,22 @@ def get_db() -> Generator[Session, None, None]:
         yield db
     finally:
         db.close()
+
+
+@contextmanager
+def session_scope(*candidates: Session | None) -> Iterator[Session]:
+    """Yield the first caller-supplied session, or a fresh one we own and close.
+
+    Pass the candidate sessions in priority order (e.g. a method's optional
+    ``session`` arg, then ``self._session``). If all are ``None`` we create a
+    ``SessionLocal()`` and close it on exit; otherwise we borrow the caller's
+    session and leave it open. Replaces the per-service
+    ``owns_session``/``_get_session``/``close_session`` boilerplate.
+    """
+    existing = next((s for s in candidates if s is not None), None)
+    session = existing or SessionLocal()
+    try:
+        yield session
+    finally:
+        if existing is None:
+            session.close()
