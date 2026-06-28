@@ -134,11 +134,13 @@ def page_market_overview():
 
     if st.button("Fetch Trust Score", key="fetch_trust"):
         sym = lookup_symbol.strip().upper()
-        if sym:
-            if sym in recent:
-                recent.remove(sym)
-            recent.insert(0, sym)
-            del recent[8:]  # keep the 8 most recent
+        if not sym:
+            st.warning("Enter a symbol before fetching a trust score.")
+            return
+        if sym in recent:
+            recent.remove(sym)
+        recent.insert(0, sym)
+        del recent[8:]  # keep the 8 most recent
         trust = get_trust_score(sym, lookup_date)
         trust_data = _safe_dict(trust)
 
