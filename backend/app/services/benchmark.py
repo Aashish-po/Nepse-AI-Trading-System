@@ -8,7 +8,7 @@ from typing import Any
 
 import numpy as np
 import sqlalchemy as sa
-from app.db.session import SessionLocal
+from app.db.session import session_scope
 from app.models.benchmark import NEPSEIndex, SectorIndex
 from app.models.price import Price
 from app.models.stock import Stock
@@ -21,11 +21,6 @@ class BenchmarkService:
     def __init__(self, session: Session | None = None) -> None:
         self._session = session
 
-    def _get_session(self) -> Session:
-        if self._session is not None:
-            return self._session
-        return SessionLocal()
-
     def run_buy_and_hold(
         self,
         symbol: str,
@@ -33,9 +28,7 @@ class BenchmarkService:
         end_date: str,
         initial_capital: Decimal = Decimal("1000000.00"),
     ) -> dict[str, Any]:
-        session = self._get_session()
-        owns_session = self._session is None
-        try:
+        with session_scope(self._session) as session:
             stock = session.scalar(sa.select(Stock).where(Stock.symbol == symbol.upper()))
             if stock is None:
                 raise ValueError(f"Symbol {symbol} not found")
@@ -74,9 +67,6 @@ class BenchmarkService:
                     )
 
             return self._calculate_benchmark_metrics(equity_curve)
-        finally:
-            if owns_session:
-                session.close()
 
     def run_nepse_index(
         self,
@@ -84,9 +74,7 @@ class BenchmarkService:
         end_date: str,
         initial_capital: Decimal = Decimal("1000000.00"),
     ) -> dict[str, Any]:
-        session = self._get_session()
-        owns_session = self._session is None
-        try:
+        with session_scope(self._session) as session:
             indices = session.scalars(
                 sa.select(NEPSEIndex)
                 .where(
@@ -115,9 +103,6 @@ class BenchmarkService:
                 )
 
             return self._calculate_benchmark_metrics(equity_curve)
-        finally:
-            if owns_session:
-                session.close()
 
     def run_sector_index(
         self,
@@ -126,9 +111,7 @@ class BenchmarkService:
         end_date: str,
         initial_capital: Decimal = Decimal("1000000.00"),
     ) -> dict[str, Any]:
-        session = self._get_session()
-        owns_session = self._session is None
-        try:
+        with session_scope(self._session) as session:
             indices = session.scalars(
                 sa.select(SectorIndex)
                 .where(
@@ -158,9 +141,6 @@ class BenchmarkService:
                 )
 
             return self._calculate_benchmark_metrics(equity_curve)
-        finally:
-            if owns_session:
-                session.close()
 
     def _calculate_benchmark_metrics(self, equity_curve: list[dict[str, Any]]) -> dict[str, Any]:
         if not equity_curve:

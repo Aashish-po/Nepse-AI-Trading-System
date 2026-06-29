@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from typing import Any
 
 import sqlalchemy as sa
-from app.db.session import SessionLocal
+from app.db.session import session_scope
 from app.models.strategy import Strategy
 from sqlalchemy.orm import Session
 
@@ -34,11 +34,6 @@ class StrategyService:
     def __init__(self, session: Session | None = None) -> None:
         self._session = session
 
-    def _get_session(self) -> Session:
-        if self._session is not None:
-            return self._session
-        return SessionLocal()
-
     def create_strategy(
         self,
         name: str,
@@ -46,9 +41,7 @@ class StrategyService:
         config: dict,
         description: str | None = None,
     ) -> Strategy:
-        owns_session = self._session is None
-        session = self._get_session()
-        try:
+        with session_scope(self._session) as session:
             strategy = Strategy(
                 name=name,
                 version=version,
@@ -59,37 +52,22 @@ class StrategyService:
             session.refresh(strategy)
             logger.info(f"Created strategy {name} v{version}")
             return strategy
-        finally:
-            if owns_session:
-                session.close()
 
     def get_strategy(self, strategy_id: int) -> Strategy | None:
-        session = self._get_session()
-        owns_session = self._session is None
-        try:
+        with session_scope(self._session) as session:
             return session.get(Strategy, strategy_id)
-        finally:
-            if owns_session:
-                session.close()
 
     def get_strategy_by_name_version(
         self, name: str, version: str | None = None
     ) -> Strategy | None:
-        session = self._get_session()
-        owns_session = self._session is None
-        try:
+        with session_scope(self._session) as session:
             query = sa.select(Strategy).where(Strategy.name == name)
             if version:
                 query = query.where(Strategy.version == version)
             return session.scalar(query)
-        finally:
-            if owns_session:
-                session.close()
 
     def list_strategies(self, limit: int = 100, offset: int = 0) -> list[Strategy]:
-        session = self._get_session()
-        owns_session = self._session is None
-        try:
+        with session_scope(self._session) as session:
             query = (
                 sa.select(Strategy)
                 .order_by(Strategy.name, Strategy.version)
@@ -97,9 +75,6 @@ class StrategyService:
                 .offset(offset)
             )
             return list(session.scalars(query))
-        finally:
-            if owns_session:
-                session.close()
 
     def evaluate_entry_signal(
         self,

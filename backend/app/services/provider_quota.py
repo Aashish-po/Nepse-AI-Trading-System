@@ -4,7 +4,7 @@ import datetime as dt
 from typing import Any
 
 import sqlalchemy as sa
-from app.db.session import SessionLocal
+from app.db.session import session_scope
 from app.models.quota import ProviderQuotaUsage
 from sqlalchemy.orm import Session
 
@@ -12,11 +12,6 @@ from sqlalchemy.orm import Session
 class ProviderQuotaService:
     def __init__(self, session: Session | None = None) -> None:
         self._session = session
-
-    def _get_session(self) -> Session:
-        if self._session is not None:
-            return self._session
-        return SessionLocal()
 
     @staticmethod
     def _parse_date(value: str | dt.date | None) -> dt.date | None:
@@ -42,10 +37,8 @@ class ProviderQuotaService:
         if not normalized_provider:
             raise ValueError("provider is required")
 
-        session = self._get_session()
-        owns_session = self._session is None
         quota_day = self._parse_date(quota_date) or dt.date.today()
-        try:
+        with session_scope(self._session) as session:
             record = session.scalar(
                 sa.select(ProviderQuotaUsage).where(
                     ProviderQuotaUsage.provider == normalized_provider,
@@ -76,12 +69,9 @@ class ProviderQuotaService:
                 record.metadata_json["last_updated_at"] = record.updated_at.isoformat()
 
             session.flush()
-            if owns_session:
+            if self._session is None:
                 session.commit()
             return record
-        finally:
-            if owns_session:
-                session.close()
 
     def get_status(
         self,
@@ -93,10 +83,8 @@ class ProviderQuotaService:
         if not normalized_provider:
             raise ValueError("provider is required")
 
-        sess = session or self._session or self._get_session()
-        owns_session = session is None and self._session is None
         quota_day = self._parse_date(quota_date) or dt.date.today()
-        try:
+        with session_scope(session, self._session) as sess:
             result = sess.execute(
                 sa.select(
                     sa.func.coalesce(sa.func.sum(ProviderQuotaUsage.request_count), 0).label(
@@ -145,20 +133,14 @@ class ProviderQuotaService:
                 "cost": float(result.cost or 0.0),
                 "metadata": record.metadata_json if record else None,
             }
-        finally:
-            if owns_session:
-                sess.commit()
-                sess.close()
 
     def list_statuses(
         self,
         quota_date: str | dt.date | None = None,
         session: Session | None = None,
     ) -> list[dict[str, Any]]:
-        sess = session or self._session or self._get_session()
-        owns_session = session is None and self._session is None
         quota_day = self._parse_date(quota_date) or dt.date.today()
-        try:
+        with session_scope(session, self._session) as sess:
             rows = sess.execute(
                 sa.select(
                     ProviderQuotaUsage.provider,
@@ -230,7 +212,3 @@ class ProviderQuotaService:
                 }
                 for row in rows
             ]
-        finally:
-            if owns_session:
-                sess.commit()
-                sess.close()

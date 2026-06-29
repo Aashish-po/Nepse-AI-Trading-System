@@ -18,7 +18,7 @@ from typing import Any
 
 import sqlalchemy as sa
 from app.core.config import Settings, settings as default_settings
-from app.db.session import SessionLocal
+from app.db.session import session_scope
 from app.models.external_market import ExternalPrice
 from app.models.macro import MacroObservation, MacroSeries
 from app.services.external.base import ExternalApiClient
@@ -44,9 +44,6 @@ class MacroFeatureBuilder:
     def __init__(self, session: Session | None = None) -> None:
         self._session = session
 
-    def _get_session(self) -> Session:
-        return self._session if self._session is not None else SessionLocal()
-
     def build_features(self, as_of: date) -> dict[str, Any]:
         """Return ``{values: {...}, meta: {...}}`` for macro features as of a date.
 
@@ -54,9 +51,7 @@ class MacroFeatureBuilder:
         never fabricated). ``meta`` records the observation date used per feature
         for provenance/leakage auditing.
         """
-        session = self._get_session()
-        owns_session = self._session is None
-        try:
+        with session_scope(self._session) as session:
             values: dict[str, float | None] = {}
             provenance: dict[str, str | None] = {}
             for feature_name, series_id in FRED_FEATURE_SERIES.items():
@@ -75,9 +70,6 @@ class MacroFeatureBuilder:
                     "macro_observation_dates": provenance,
                 },
             }
-        finally:
-            if owns_session:
-                session.close()
 
     def _latest_observation(
         self,
@@ -117,18 +109,13 @@ class NewsSentimentFeatureBuilder:
         self._session = session
         self._window_days = window_days
 
-    def _get_session(self) -> Session:
-        return self._session if self._session is not None else SessionLocal()
-
     def build_features(self, symbol: str, as_of: date) -> dict[str, Any]:
         """Return ``{values: {...}, meta: {...}}`` for one stock's news features."""
         # Imported here to avoid a circular import at module load
         # (external_sentiment imports ml.sentiment, which is heavier).
         from app.services.external_sentiment import aggregate_symbol_sentiment
 
-        session = self._get_session()
-        owns_session = self._session is None
-        try:
+        with session_scope(self._session) as session:
             agg = aggregate_symbol_sentiment(session, symbol, as_of, window_days=self._window_days)
             return {
                 "values": {
@@ -143,9 +130,6 @@ class NewsSentimentFeatureBuilder:
                     "news_backend": agg["backend"],
                 },
             }
-        finally:
-            if owns_session:
-                session.close()
 
 
 class GlobalMarketFeatureBuilder:
@@ -169,13 +153,8 @@ class GlobalMarketFeatureBuilder:
         self._session = session
         self._cfg = cfg or default_settings
 
-    def _get_session(self) -> Session:
-        return self._session if self._session is not None else SessionLocal()
-
     def build_features(self, as_of: date) -> dict[str, Any]:
-        session = self._get_session()
-        owns_session = self._session is None
-        try:
+        with session_scope(self._session) as session:
             # Closes at or before as_of, most recent first.
             closes = list(
                 session.scalars(
@@ -201,9 +180,6 @@ class GlobalMarketFeatureBuilder:
                     "global_rows_available": len(closes),
                 },
             }
-        finally:
-            if owns_session:
-                session.close()
 
     @staticmethod
     def _trailing_return(closes_desc: Sequence[float | None], lookback: int) -> float | None:
@@ -218,8 +194,6 @@ class GlobalMarketFeatureBuilder:
 
     def ingest_benchmark(self, symbol: str, today: date) -> dict[str, Any]:
         """Fetch + persist OHLCV rows for the benchmark symbol (for feature generation)."""
-        session = self._get_session()
-        owns_session = self._session is None
         client: ExternalApiClient
         if self._provider == "marketstack":
             client = MarketstackClient(cfg=self._cfg)
@@ -227,37 +201,28 @@ class GlobalMarketFeatureBuilder:
             client = FinnhubClient(cfg=self._cfg)
         else:
             raise ValueError(f"Unsupported provider: {self._provider}")
-        owns_client = True
         try:
-            return self._ingest_one(session, client, symbol.upper(), today)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("%s ingest for %s failed: %s", self._provider, symbol, exc)
-            session.rollback()
-            return {"status": "failed", "error": str(exc), "fetched": 0, "inserted": 0}
+            with session_scope(self._session) as session:
+                try:
+                    return self._ingest_one(session, client, symbol.upper(), today)
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("%s ingest for %s failed: %s", self._provider, symbol, exc)
+                    session.rollback()
+                    return {"status": "failed", "error": str(exc), "fetched": 0, "inserted": 0}
         finally:
-            if owns_client:
-                client.close()
-            if owns_session:
-                session.close()
+            client.close()
 
     def ingest_benchmark_from_client(
         self, client: ExternalApiClient, symbol: str, today: date
     ) -> dict[str, Any]:
         """Variant of ingest_benchmark that accepts an existing client (e.g. for testing)."""
-        session = self._get_session()
-        owns_session = self._session is None
-        owns_client = False
-        try:
-            return self._ingest_one(session, client, symbol.upper(), today)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("%s ingest for %s failed: %s", self._provider, symbol, exc)
-            session.rollback()
-            return {"status": "failed", "error": str(exc), "fetched": 0, "inserted": 0}
-        finally:
-            if owns_client:
-                client.close()
-            if owns_session:
-                session.close()
+        with session_scope(self._session) as session:
+            try:
+                return self._ingest_one(session, client, symbol.upper(), today)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("%s ingest for %s failed: %s", self._provider, symbol, exc)
+                session.rollback()
+                return {"status": "failed", "error": str(exc), "fetched": 0, "inserted": 0}
 
     def ingest_benchmark_from_client_and_session(
         self, client: ExternalApiClient, session: Session, symbol: str, today: date

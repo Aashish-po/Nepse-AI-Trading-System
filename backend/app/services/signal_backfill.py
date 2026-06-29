@@ -8,7 +8,7 @@ import logging
 from typing import Any
 
 import sqlalchemy as sa
-from app.db.session import SessionLocal
+from app.db.session import session_scope
 from app.models.price import Price
 from app.models.signal import Signal
 from app.models.stock import Stock
@@ -56,10 +56,8 @@ class SignalBackfillService:
         risk_rules: list[dict[str, Any]] | None = None,
         upsert: bool = True,
     ) -> dict[str, Any]:
-        session = self._session or SessionLocal()
-        owns_session = self._session is None
         requested_symbols = [symbol.upper() for symbol in symbols or []]
-        try:
+        with session_scope(self._session) as session:
             query = sa.select(Stock)
             if requested_symbols:
                 query = query.where(Stock.symbol.in_(requested_symbols))
@@ -92,9 +90,6 @@ class SignalBackfillService:
                 "results": results,
                 "errors": errors,
             }
-        finally:
-            if owns_session:
-                session.close()
 
     def backfill_symbol(
         self,
@@ -106,9 +101,7 @@ class SignalBackfillService:
         risk_rules: list[dict[str, Any]] | None = None,
         upsert: bool = True,
     ) -> dict[str, int]:
-        session = self._session or SessionLocal()
-        owns_session = self._session is None
-        try:
+        with session_scope(self._session) as session:
             active_entry_rules = entry_rules if entry_rules is not None else DEFAULT_ENTRY_RULES
             active_exit_rules = exit_rules if exit_rules is not None else DEFAULT_EXIT_RULES
             stock = session.scalar(sa.select(Stock).where(Stock.symbol == symbol.upper()))
@@ -220,6 +213,3 @@ class SignalBackfillService:
                     skipped += 1
             session.commit()
             return {"created": created, "updated": updated, "skipped": skipped}
-        finally:
-            if owns_session:
-                session.close()

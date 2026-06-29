@@ -11,7 +11,7 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 import sqlalchemy as sa
-from app.db.session import SessionLocal
+from app.db.session import session_scope
 from app.models.data_quality import DataTrust
 from app.models.feature import Features
 from app.models.price import Price
@@ -113,11 +113,6 @@ class FeatureService:
         """Convert pandas Series to clean NumPy float64 array."""
         return series.to_numpy(dtype=np.float64, copy=False)
 
-    def _get_session(self) -> Session:
-        if self._session is not None:
-            return self._session
-        return SessionLocal()
-
     def compute_features(
         self,
         symbol: str,
@@ -148,14 +143,12 @@ class FeatureService:
         start_date: str | None = None,
         end_date: str | None = None,
     ) -> dict[str, Any]:
-        owns_session = self._session is None
-        session = self._get_session()
         total_processed = 0
         total_gated = 0
         total_inserted = 0
         errors: list[dict[str, str]] = []
 
-        try:
+        with session_scope(self._session) as session:
             for symbol in symbols:
                 try:
                     result = self._compute_features_batch_for_stock(
@@ -180,9 +173,6 @@ class FeatureService:
                 "total_inserted_rows": total_inserted,
                 "errors": errors,
             }
-        finally:
-            if owns_session:
-                session.close()
 
     def _compute_features_batch_for_stock(
         self,
@@ -191,9 +181,7 @@ class FeatureService:
         end_date: str | None = None,
         session: Session | None = None,
     ) -> dict[str, Any]:
-        owns_session = session is None and self._session is None
-        sess = session or self._get_session()
-        try:
+        with session_scope(session, self._session) as sess:
             stock = sess.scalar(sa.select(Stock).where(Stock.symbol == symbol.upper()))
             if stock is None:
                 raise ValueError(f"Stock {symbol} not found")
@@ -344,9 +332,6 @@ class FeatureService:
                 "inserted_rows": inserted_count,
                 "features_computed": list(features_df.columns),
             }
-        finally:
-            if owns_session:
-                sess.close()
 
     def _prices_to_dataframe(self, prices: Sequence[Price]) -> pd.DataFrame:
         data = [
@@ -401,9 +386,7 @@ class FeatureService:
     def _get_trust_version_for_date(
         self, symbol: str, date_str: str, session: Session | None = None
     ) -> str:
-        sess = session or self._get_session()
-        owns_session = session is None and self._session is None
-        try:
+        with session_scope(session, self._session) as sess:
             stock = sess.scalar(sa.select(Stock).where(Stock.symbol == symbol.upper()))
             if stock is None:
                 return "v1"
@@ -414,9 +397,6 @@ class FeatureService:
                 )
             )
             return trust_record.trust_version if trust_record else "v1"
-        finally:
-            if owns_session:
-                sess.close()
 
     def _apply_trust_scaling(
         self,
@@ -444,9 +424,7 @@ class FeatureService:
     def _apply_event_overrides(
         self, symbol: str, date_str: str, session: Session | None = None
     ) -> dict[str, Any]:
-        sess = session or self._get_session()
-        owns_session = session is None and self._session is None
-        try:
+        with session_scope(session, self._session) as sess:
             dq = DataQualityService(session=sess)
             overrides = dq.get_active_event_overrides(date_str, symbol)
             multiplier = 1.0
@@ -458,9 +436,6 @@ class FeatureService:
                 "multiplier": max(0.0, min(1.0, multiplier)),
                 "event_types": event_types,
             }
-        finally:
-            if owns_session:
-                sess.close()
 
     def _normalize_event_type(self, raw: str) -> str:
         normalized = EVENT_TYPE_ALIASES.get(raw.lower(), raw.lower())
@@ -667,9 +642,7 @@ class FeatureService:
         return np.asarray(range_pct)
 
     def _compute_single_features(self, symbol: str, date_str: str) -> dict[str, Any]:
-        session = self._get_session()
-        owns_session = self._session is None
-        try:
+        with session_scope(self._session) as session:
             stock = session.scalar(sa.select(Stock).where(Stock.symbol == symbol.upper()))
             if stock is None:
                 raise ValueError(f"Stock {symbol} not found")
@@ -796,9 +769,6 @@ class FeatureService:
                 "feature_version": self._feature_version,
                 "features": scaled_features,
             }
-        finally:
-            if owns_session:
-                session.close()
 
     def _persist_single_feature(
         self,
@@ -813,61 +783,59 @@ class FeatureService:
         event_info: dict[str, Any] | None = None,
         confidence_adjustments: dict[str, Any] | None = None,
     ) -> None:
-        session = self._get_session()
-        owns_session = self._session is None
-        try:
-            stock = session.scalar(sa.select(Stock).where(Stock.symbol == symbol.upper()))
-            if stock is None:
-                raise ValueError(f"Stock {symbol} not found")
+        with session_scope(self._session) as session:
+            try:
+                stock = session.scalar(sa.select(Stock).where(Stock.symbol == symbol.upper()))
+                if stock is None:
+                    raise ValueError(f"Stock {symbol} not found")
 
-            if trust_version is None:
-                trust_version = self._get_trust_version_for_date(symbol, date_str, session)
-            if feature_weight is None:
-                gate = self._gate if session is None else DataQualityGate(session=session)
-                feature_weight = gate.get_feature_weight(symbol, date_str)
+                if trust_version is None:
+                    trust_version = self._get_trust_version_for_date(symbol, date_str, session)
+                if feature_weight is None:
+                    gate = self._gate if session is None else DataQualityGate(session=session)
+                    feature_weight = gate.get_feature_weight(symbol, date_str)
 
-            if confidence is None and trust_score is not None and feature_weight > 0:
-                confidence = max(0.0, min(1.0, trust_score * feature_weight))
+                if confidence is None and trust_score is not None and feature_weight > 0:
+                    confidence = max(0.0, min(1.0, trust_score * feature_weight))
 
-            has_event_override = bool(event_info is not None and event_info.get("event_types"))
+                has_event_override = bool(event_info is not None and event_info.get("event_types"))
 
-            features_meta: dict[str, Any] = {
-                "trust_score": trust_score,
-                "feature_weight": feature_weight,
-                "confidence_raw": confidence,
-                "correlation_penalty": correlation_penalty,
-                "event_override": {
-                    "active": has_event_override,
-                    "event_types": event_info.get("event_types") if event_info else [],
-                    "event_multiplier": event_info.get("event_multiplier") if event_info else 1.0,
-                    "original_trust": event_info.get("original_trust") if event_info else None,
-                    "adjusted_trust": event_info.get("adjusted_trust") if event_info else None,
-                },
-                "confidence_adjustments": confidence_adjustments,
-                "version": self._feature_version,
-                "scaled_by_trust": trust_score is not None,
-                "event_adjusted": has_event_override,
-                "correlation_penalized": correlation_penalty < 1.0,
-            }
+                features_meta: dict[str, Any] = {
+                    "trust_score": trust_score,
+                    "feature_weight": feature_weight,
+                    "confidence_raw": confidence,
+                    "correlation_penalty": correlation_penalty,
+                    "event_override": {
+                        "active": has_event_override,
+                        "event_types": event_info.get("event_types") if event_info else [],
+                        "event_multiplier": event_info.get("event_multiplier")
+                        if event_info
+                        else 1.0,
+                        "original_trust": event_info.get("original_trust") if event_info else None,
+                        "adjusted_trust": event_info.get("adjusted_trust") if event_info else None,
+                    },
+                    "confidence_adjustments": confidence_adjustments,
+                    "version": self._feature_version,
+                    "scaled_by_trust": trust_score is not None,
+                    "event_adjusted": has_event_override,
+                    "correlation_penalized": correlation_penalty < 1.0,
+                }
 
-            feature = Features(
-                stock_id=stock.id,
-                date=date.fromisoformat(date_str),
-                feature_version=self._feature_version,
-                trust_score=trust_score,
-                trust_version=trust_version,
-                confidence=confidence,
-                features_meta=features_meta,
-                values=features,
-            )
-            session.merge(feature)
-            session.commit()
-        except SQLAlchemyError:
-            session.rollback()
-            raise
-        finally:
-            if owns_session:
-                session.close()
+                feature = Features(
+                    stock_id=stock.id,
+                    date=date.fromisoformat(date_str),
+                    feature_version=self._feature_version,
+                    trust_score=trust_score,
+                    trust_version=trust_version,
+                    confidence=confidence,
+                    features_meta=features_meta,
+                    values=features,
+                )
+                session.merge(feature)
+                session.commit()
+            except SQLAlchemyError:
+                session.rollback()
+                raise
 
     def _bulk_persist_features(
         self,
@@ -882,96 +850,106 @@ class FeatureService:
         confidence_adjustments_list: list[dict[str, Any] | None] | None = None,
         session: Session | None = None,
     ) -> int:
-        sess = session or self._get_session()
-        owns_session = session is None and self._session is None
-        try:
-            features_to_insert = []
-            for idx, (_, row) in enumerate(features_df.iterrows()):
-                values = row.drop("date").to_dict()
-                clean_values = {k: float(v) if not np.isnan(v) else None for k, v in values.items()}
+        with session_scope(session, self._session) as sess:
+            try:
+                features_to_insert = []
+                for idx, (_, row) in enumerate(features_df.iterrows()):
+                    values = row.drop("date").to_dict()
+                    clean_values = {
+                        k: float(v) if not np.isnan(v) else None for k, v in values.items()
+                    }
 
-                trust = trust_scores[idx] if trust_scores and idx < len(trust_scores) else None
-                trust_ver = (
-                    trust_versions[idx] if trust_versions and idx < len(trust_versions) else None
-                )
-                weight = (
-                    feature_weights[idx] if feature_weights and idx < len(feature_weights) else None
-                )
-                confidence = confidences[idx] if confidences and idx < len(confidences) else None
-                event_info = (
-                    event_infos[idx]
-                    if event_infos and idx < len(event_infos) and event_infos[idx]
-                    else None
-                )
-                corr_pen = (
-                    correlation_penalties[idx]
-                    if correlation_penalties and idx < len(correlation_penalties)
-                    else 1.0
-                )
-                adj = (
-                    confidence_adjustments_list[idx]
-                    if confidence_adjustments_list
-                    and idx < len(confidence_adjustments_list)
-                    and confidence_adjustments_list[idx]
-                    else None
-                )
-
-                has_event_override = bool(event_info is not None and event_info.get("event_types"))
-
-                features_meta: dict[str, Any] = {
-                    "trust_score": trust,
-                    "feature_weight": weight,
-                    "confidence_raw": confidence,
-                    "correlation_penalty": corr_pen,
-                    "event_override": {
-                        "active": has_event_override,
-                        "event_types": event_info.get("event_types") if event_info else [],
-                        "event_multiplier": event_info.get("event_multiplier")
-                        if event_info
-                        else 1.0,
-                        "original_trust": event_info.get("original_trust") if event_info else None,
-                        "adjusted_trust": event_info.get("adjusted_trust") if event_info else None,
-                    },
-                    "confidence_adjustments": adj,
-                    "version": self._feature_version,
-                    "scaled_by_trust": trust is not None,
-                    "event_adjusted": has_event_override,
-                    "correlation_penalized": corr_pen is not None and corr_pen < 1.0,
-                }
-
-                features_to_insert.append(
-                    Features(
-                        stock_id=stock_id,
-                        date=row["date"].date(),
-                        feature_version=self._feature_version,
-                        trust_score=trust,
-                        trust_version=trust_ver,
-                        confidence=confidence,
-                        features_meta=features_meta,
-                        values=clean_values,
+                    trust = trust_scores[idx] if trust_scores and idx < len(trust_scores) else None
+                    trust_ver = (
+                        trust_versions[idx]
+                        if trust_versions and idx < len(trust_versions)
+                        else None
                     )
+                    weight = (
+                        feature_weights[idx]
+                        if feature_weights and idx < len(feature_weights)
+                        else None
+                    )
+                    confidence = (
+                        confidences[idx] if confidences and idx < len(confidences) else None
+                    )
+                    event_info = (
+                        event_infos[idx]
+                        if event_infos and idx < len(event_infos) and event_infos[idx]
+                        else None
+                    )
+                    corr_pen = (
+                        correlation_penalties[idx]
+                        if correlation_penalties and idx < len(correlation_penalties)
+                        else 1.0
+                    )
+                    adj = (
+                        confidence_adjustments_list[idx]
+                        if confidence_adjustments_list
+                        and idx < len(confidence_adjustments_list)
+                        and confidence_adjustments_list[idx]
+                        else None
+                    )
+
+                    has_event_override = bool(
+                        event_info is not None and event_info.get("event_types")
+                    )
+
+                    features_meta: dict[str, Any] = {
+                        "trust_score": trust,
+                        "feature_weight": weight,
+                        "confidence_raw": confidence,
+                        "correlation_penalty": corr_pen,
+                        "event_override": {
+                            "active": has_event_override,
+                            "event_types": event_info.get("event_types") if event_info else [],
+                            "event_multiplier": event_info.get("event_multiplier")
+                            if event_info
+                            else 1.0,
+                            "original_trust": event_info.get("original_trust")
+                            if event_info
+                            else None,
+                            "adjusted_trust": event_info.get("adjusted_trust")
+                            if event_info
+                            else None,
+                        },
+                        "confidence_adjustments": adj,
+                        "version": self._feature_version,
+                        "scaled_by_trust": trust is not None,
+                        "event_adjusted": has_event_override,
+                        "correlation_penalized": corr_pen is not None and corr_pen < 1.0,
+                    }
+
+                    features_to_insert.append(
+                        Features(
+                            stock_id=stock_id,
+                            date=row["date"].date(),
+                            feature_version=self._feature_version,
+                            trust_score=trust,
+                            trust_version=trust_ver,
+                            confidence=confidence,
+                            features_meta=features_meta,
+                            values=clean_values,
+                        )
+                    )
+
+                with sess.begin_nested():
+                    for feat in features_to_insert:
+                        sess.merge(feat)
+
+                sess.commit()
+                logger.info(
+                    f"Bulk persisted {len(features_to_insert)} feature rows",
+                    extra={"stock_id": stock_id, "feature_version": self._feature_version},
                 )
-
-            with sess.begin_nested():
-                for feat in features_to_insert:
-                    sess.merge(feat)
-
-            sess.commit()
-            logger.info(
-                f"Bulk persisted {len(features_to_insert)} feature rows",
-                extra={"stock_id": stock_id, "feature_version": self._feature_version},
-            )
-            return len(features_to_insert)
-        except SQLAlchemyError as e:
-            sess.rollback()
-            logger.error(
-                f"Bulk feature persistence failed: {e}",
-                extra={"stock_id": stock_id},
-            )
-            raise
-        finally:
-            if owns_session:
-                sess.close()
+                return len(features_to_insert)
+            except SQLAlchemyError as e:
+                sess.rollback()
+                logger.error(
+                    f"Bulk feature persistence failed: {e}",
+                    extra={"stock_id": stock_id},
+                )
+                raise
 
     def get_features(
         self,
@@ -979,9 +957,7 @@ class FeatureService:
         date_str: str,
         feature_version: str | None = None,
     ) -> dict[str, Any] | None:
-        session = self._get_session()
-        owns_session = self._session is None
-        try:
+        with session_scope(self._session) as session:
             stock = session.scalar(sa.select(Stock).where(Stock.symbol == symbol.upper()))
             if stock is None:
                 return None
@@ -1007,9 +983,6 @@ class FeatureService:
                 "features_meta": feature.features_meta,
                 "features": feature.values,
             }
-        finally:
-            if owns_session:
-                session.close()
 
     def get_features_list(
         self,
@@ -1020,9 +993,7 @@ class FeatureService:
         limit: int = 100,
         offset: int = 0,
     ) -> dict[str, Any]:
-        session = self._get_session()
-        owns_session = self._session is None
-        try:
+        with session_scope(self._session) as session:
             stock = session.scalar(sa.select(Stock).where(Stock.symbol == symbol.upper()))
             if stock is None:
                 return {"features": [], "total": 0, "limit": limit, "offset": offset}
@@ -1075,6 +1046,3 @@ class FeatureService:
                 "limit": limit,
                 "offset": offset,
             }
-        finally:
-            if owns_session:
-                session.close()
