@@ -189,6 +189,7 @@ class ProviderQuotaService:
                         sa.and_(
                             ProviderQuotaUsage.provider == latest.c.provider,
                             ProviderQuotaUsage.updated_at == latest.c.updated_at,
+                            ProviderQuotaUsage.quota_date == quota_day,
                         ),
                     )
                 ).all()

@@ -314,16 +314,6 @@ def get_daily_quality_report() -> dict | None:
         return None
 
 
-def get_signal_heatmap(date_str: str) -> dict | None:
-    """Get signal distribution heatmap for a date."""
-    try:
-        res = requests.get(f"{API_BASE}/signals/heatmap/{date_str}", timeout=10)
-        res.raise_for_status()
-        return res.json()
-    except Exception:
-        return None
-
-
 def run_backtest(payload: dict) -> dict:
     """Execute backtest with given config."""
     headers = {}

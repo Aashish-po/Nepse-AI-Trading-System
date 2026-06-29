@@ -155,17 +155,3 @@ class MarketCalendar:
     def clear_cache(self) -> None:
         with self._lock:
             self._cache.clear()
-
-
-# Shared default instance for module-level convenience helpers.
-_default_calendar = MarketCalendar()
-
-
-def is_holiday(date: dt.date | dt.datetime) -> bool:
-    """Module-level helper using the default :class:`MarketCalendar`."""
-    return _default_calendar.is_holiday(date)
-
-
-def is_market_open(date: dt.date | dt.datetime) -> bool:
-    """Module-level helper using the default :class:`MarketCalendar`."""
-    return _default_calendar.is_market_open(date)

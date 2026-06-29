@@ -117,11 +117,12 @@ class NewsSentimentFeatureBuilder:
 
         with session_scope(self._session) as session:
             agg = aggregate_symbol_sentiment(session, symbol, as_of, window_days=self._window_days)
+            suffix = f"{self._window_days}d"
             return {
                 "values": {
-                    "news_sentiment_score_7d": agg["score"],
-                    "news_sentiment_confidence_7d": agg["confidence"],
-                    "news_article_count_7d": float(agg["count"]),
+                    f"news_sentiment_score_{suffix}": agg["score"],
+                    f"news_sentiment_confidence_{suffix}": agg["confidence"],
+                    f"news_article_count_{suffix}": float(agg["count"]),
                 },
                 "meta": {
                     "news_provider": "newsapi",
