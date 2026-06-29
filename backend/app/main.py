@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import sys
 from pathlib import Path
@@ -130,10 +131,7 @@ def create_app() -> FastAPI:
         app.include_router(ml_router)
     except ImportError as e:
         # ML module optional - log but don't fail app startup
-        from app.core.logging import get_logger
-
-        logger = get_logger(__name__)
-        logger.warning(f"ML router import failed (optional): {e}")
+        logging.getLogger(__name__).warning(f"ML router import failed (optional): {e}")
 
     return app
 

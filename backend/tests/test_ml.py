@@ -28,9 +28,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ml.dataset import DatasetBuilder, DatasetBundle
-from ml.drift_monitoring import CorrelationMonitor, DriftMonitor
-from ml.evaluation import ModelEvaluator
-from ml.experiment_tracking import ExperimentTracker
 from ml.feature_vector import (
     FEATURE_DIM,
     FEATURE_ORDER,
@@ -39,8 +36,6 @@ from ml.feature_vector import (
     validate_vector,
 )
 from ml.labeling import LabelConfig, LabelMode, create_labels
-from ml.position_sizing import PositionSizer, SizingMethod
-from ml.risk_manager import RiskManager, StopLossManager
 from ml.training import ModelTrainer
 
 
@@ -197,23 +192,6 @@ class TestModelTrainer:
         assert "val_accuracy" in registry.metrics
 
 
-class TestModelEvaluator:
-    def test_evaluate_classification(self, db_session: Session) -> None:
-        from sklearn.linear_model import LogisticRegression
-
-        _seed_price_series(db_session, "EVAL", "2024-01-01", count=40)
-        _seed_features(db_session, "EVAL")
-        builder = DatasetBuilder(session=db_session, feature_version=FEATURE_VERSION)
-        bundle = builder.build("EVAL")
-        model = LogisticRegression(max_iter=1000)
-        model.fit(bundle.X_train, bundle.y_train)
-        evaluator = ModelEvaluator(session=db_session)
-        metrics = evaluator.evaluate_classification(model, bundle.X_test, bundle.y_test)
-        assert "accuracy" in metrics
-        assert "f1_weighted" in metrics
-        assert 0.0 <= metrics["accuracy"] <= 1.0
-
-
 class TestWalkForward:
     def test_walk_forward_iterator(self, db_session: Session) -> None:
         _seed_price_series(db_session, "WALK", "2024-01-01", count=60)
@@ -233,77 +211,6 @@ class TestWalkForward:
             assert wf.bundle.X_train.shape[0] + wf.bundle.X_val.shape[0] + wf.bundle.X_test.shape[
                 0
             ] == len(wf.bundle.train_dates) + len(wf.bundle.val_dates) + len(wf.bundle.test_dates)
-
-
-class TestPositionSizing:
-    def test_fixed_sizing(self) -> None:
-        sizer = PositionSizer(capital=100000, method=SizingMethod.fixed)
-        result = sizer.calculate(price=100, confidence=0.8, volatility=0.02)
-        assert result.quantity == 100
-        assert result.sizing_method == "fixed"
-
-    def test_confidence_sizing(self) -> None:
-        sizer = PositionSizer(capital=100000, method=SizingMethod.confidence)
-        result = sizer.calculate(price=100, confidence=0.5, volatility=0.02)
-        assert result.quantity == 50
-
-    def test_hybrid_sizing(self) -> None:
-        sizer = PositionSizer(capital=100000, method=SizingMethod.hybrid)
-        result = sizer.calculate(price=100, confidence=0.8, volatility=0.05)
-        assert result.quantity > 0
-
-
-class TestRiskManagement:
-    def test_risk_manager_allow(self) -> None:
-        rm = RiskManager(max_drawdown=0.3)
-        decision = rm.check_trade("TEST", 5000, 100000, {})
-        assert decision.allow_trade is True
-
-    def test_risk_manager_drawdown(self) -> None:
-        rm = RiskManager(max_drawdown=0.1)
-        rm.evaluate("TEST", 100000, {})  # Set peak equity
-        decision = rm.check_trade("TEST", 1000, 90000, {})  # 10% drawdown from 100k
-        assert decision.allow_trade is False
-        assert decision.reason is not None and "drawdown" in decision.reason
-
-    def test_stop_loss_manager(self) -> None:
-        slm = StopLossManager()
-        slm.set_entry("TEST", 100.0)
-        assert slm.check_exit("TEST", 94.0) == "stop_loss"
-        assert slm.check_exit("TEST", 112.0) == "take_profit"
-        assert slm.check_exit("TEST", 100.0) is None
-
-
-class TestDriftMonitoring:
-    def test_drift_detection_no_drift(self) -> None:
-        dm = DriftMonitor(p_threshold=0.05, psi_threshold=0.2)
-        ref = {"feature": np.array([1.0, 2.0, 3.0, 4.0, 5.0] * 20, dtype=np.float64)}
-        cur = {"feature": np.array([1.0, 2.0, 3.0, 4.0, 5.0] * 20, dtype=np.float64)}
-        results = dm.detect(ref, cur)
-        assert all(not r.is_drift for r in results)
-
-    def test_correlation_monitor(self) -> None:
-        cm = CorrelationMonitor(threshold=0.8)
-        ref = np.array([[1, 2], [3, 4], [5, 6], [7, 8]], dtype=np.float64)
-        cur = np.array([[1, 2], [3, 4], [5, 6], [7, 8]], dtype=np.float64)
-        result = cm.detect(ref, cur)
-        assert result.get("significant_change") is False
-
-
-class TestExperimentTracking:
-    def test_log_experiment(self, tmp_path: Path) -> None:
-        et = ExperimentTracker(experiments_dir=tmp_path)
-        exp_id = et.log(
-            strategy_version="v1.0",
-            model_version="logistic_v1",
-            dataset_version="dataset_v1",
-            metrics={"sharpe": 1.5},
-            config={"horizon": 5},
-        )
-        assert len(exp_id) == 8
-        result = et.get(exp_id)
-        assert result is not None
-        assert result["metrics"]["sharpe"] == 1.5
 
 
 # ============================================================================

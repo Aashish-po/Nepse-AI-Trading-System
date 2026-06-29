@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from functools import lru_cache
 from typing import Literal
 
 from pydantic import AliasChoices, Field, model_validator
@@ -16,7 +15,6 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     app_env: Literal["local", "test", "dev", "prod"] = "local"
-    app_name: str = "NEPSE AI Trading Research Platform"
     app_version: str = "0.1.0"
 
     secret_key: str = DEFAULT_SECRET_KEY
@@ -28,14 +26,9 @@ class Settings(BaseSettings):
         default=2,
         description="Seconds to wait for a (non-SQLite) DB connection before failing fast.",
     )
-    redis_url: str = "redis://localhost:6379/0"
     mlflow_enabled: bool = True
     mlflow_tracking_uri: str = "file:./mlruns"
     mlflow_experiment_prefix: str = ""
-
-    nepse_primary_data_source_url: str = ""
-    nepse_backup_data_source_url: str = ""
-    data_trust_score_minimum: float = 0.90
 
     calendarific_api_key: str = ""
     calendarific_country: str = "NP"
@@ -91,10 +84,6 @@ class Settings(BaseSettings):
         default="",
         validation_alias=AliasChoices("CONTEX.DEV", "contex_dev_api_key"),
     )
-    contex_dev_base_url: str = Field(
-        default="https://api.context.dev/",
-        validation_alias=AliasChoices("CONTEX_BASE_URL", "contex_dev_base_url"),
-    )
 
     @model_validator(mode="after")
     def _require_secret_key_outside_local(self) -> Settings:
@@ -107,9 +96,4 @@ class Settings(BaseSettings):
         return self
 
 
-@lru_cache
-def get_settings() -> Settings:
-    return Settings()
-
-
-settings = get_settings()
+settings = Settings()

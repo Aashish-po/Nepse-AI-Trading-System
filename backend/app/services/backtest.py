@@ -13,7 +13,7 @@ from typing import Any
 import numpy as np
 import polars as pl
 import sqlalchemy as sa
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, session_scope
 from app.models.backtest import Backtest
 from app.models.data_quality import HolidayCalendar
 from app.models.portfolio_snapshot import PortfolioSnapshot
@@ -657,11 +657,8 @@ class BacktestService:
     def _get_engine(self) -> BacktestEngine:
         if self._engine is not None:
             return self._engine
-        owns_session = self._session is None
         session = self._get_session()
         self._engine = BacktestEngine(data_quality_gate=DataQualityGate(session=session))
-        if owns_session:
-            pass
         return self._engine
 
     def run_backtest(
@@ -669,9 +666,7 @@ class BacktestService:
         strategy_id: int,
         config: dict,
     ) -> dict[str, Any]:
-        session = self._get_session()
-        owns_session = self._session is None
-        try:
+        with session_scope(self._session) as session:
             strategy = session.get(Strategy, strategy_id)
             if strategy is None:
                 raise ValueError(f"Strategy {strategy_id} not found")
@@ -723,9 +718,6 @@ class BacktestService:
                 "strategy_id": strategy_id,
                 "metrics": result,
             }
-        finally:
-            if owns_session:
-                session.close()
 
     def _json_safe_metrics(self, value: Any) -> Any:
         if isinstance(value, Decimal):

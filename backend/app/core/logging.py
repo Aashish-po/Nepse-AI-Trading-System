@@ -40,17 +40,3 @@ def configure_logging() -> None:
 
     for name in ("sqlalchemy", "alembic"):
         logging.getLogger(name).setLevel(logging.WARNING)
-
-
-def get_logger(name: str) -> logging.Logger:
-    return logging.getLogger(name)
-
-
-if __name__ == "__main__":
-    configure_logging()
-    logger = get_logger(__name__)
-    logger.info("Logging configured successfully")
-    logger.warning("This is a warning")
-    logger.error("This is an error")
-    logger.critical("This is a critical error")
-    logger.debug("This is a debug message")

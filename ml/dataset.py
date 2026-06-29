@@ -288,34 +288,6 @@ class DatasetBuilder:
             X[:, i] = col
         return X
 
-    def get_feature_version(self) -> str:
-        return self._feature_version
-
-    def get_label_config(self) -> LabelConfig:
-        return self._label_config
-
-    def get_artifacts_dir(self) -> Path:
-        return self._artifacts_dir
-
-    def get_impute(self) -> bool:
-        return self._impute
-
-    def get_session(self) -> Session:
-        return self._session
-
-    def get_dataset_shape(self, symbol: str) -> tuple[int, int]:
-        rows = self._query_feature_price_rows(symbol)
-        if not rows:
-            raise ValueError(f"No feature/price data available for {symbol}")
-        return len(rows), len(rows[0][0].values or {})
-
-    def get_available_symbols(self) -> list[str]:
-        stocks = self._session.scalars(select(Stock)).all()
-        return [s.symbol for s in stocks]
-
-    def get_available_feature_versions(self) -> list[str]:
-        return list(self._session.scalars(select(Features.feature_version).distinct()).all())
-
     def build_supervised(
         self,
         symbols: list[str],

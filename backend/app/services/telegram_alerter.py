@@ -8,7 +8,7 @@ import logging
 from typing import Any
 
 import sqlalchemy as sa
-from app.db.session import SessionLocal
+from app.db.session import session_scope
 from app.models.signal import Signal
 from app.models.stock import Stock
 from app.models.telegram import TelegramDailyAlert
@@ -57,11 +57,6 @@ class TelegramAlerter:
         self._gate = gate or DataQualityGate(session=session)
         self._quota = ProviderQuotaService(session=session)
 
-    def _get_session(self) -> Session:
-        if self._session is not None:
-            return self._session
-        return SessionLocal()
-
     def _remaining_cap(self, session: Session, symbol: str, alert_date: dt.date) -> int:
         count = session.scalar(
             sa.select(sa.func.coalesce(sa.func.sum(TelegramDailyAlert.alert_count), 0))
@@ -89,9 +84,7 @@ class TelegramAlerter:
         trailing_stop: float | None = None,
         session: Session | None = None,
     ) -> TelegramSendResult:
-        owns_session = session is None
-        sess = session or self._get_session()
-        try:
+        with session_scope(session, self._session) as sess:
             symbol = symbol.upper()
             try:
                 alert_date = dt.date.fromisoformat(date_str)
@@ -210,9 +203,6 @@ class TelegramAlerter:
                     alert_id=alert.id if alert else None,
                 )
             return TelegramSendResult(False, DELIVERY_FAILED, error=send_error)
-        finally:
-            if owns_session:
-                sess.close()
 
     def _persist_alert(
         self,
@@ -291,9 +281,7 @@ class TelegramAlerter:
     def provider_quota_status(
         self, provider: str, session: Session | None = None
     ) -> dict[str, Any]:
-        sess = session or self._session or self._get_session()
-        owns_session = session is None and self._session is None
-        try:
+        with session_scope(session, self._session) as sess:
             today = dt.date.today()
             signal_result = sess.execute(
                 sa.select(
@@ -320,6 +308,3 @@ class TelegramAlerter:
                 "quota_token_count": quota["token_count"],
                 "metadata": quota["metadata"],
             }
-        finally:
-            if owns_session:
-                sess.close()

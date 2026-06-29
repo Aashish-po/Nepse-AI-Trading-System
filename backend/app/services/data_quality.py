@@ -6,7 +6,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import sqlalchemy as sa
-from app.db.session import SessionLocal
+from app.db.session import session_scope
 from app.models.data_quality import (
     DataQualityAlert,
     DataQualityReport,
@@ -26,26 +26,13 @@ class DataQualityService:
     def __init__(self, session: Session | None = None) -> None:
         self._session = session
 
-    def _get_session(self) -> Session:
-        if self._session is not None:
-            return self._session
-        return SessionLocal()
-
-    def close_session(self, session: Session, owns_session: bool) -> None:
-        if owns_session and session is not self._session:
-            session.close()
-
     def evaluate_symbol_date(
         self,
         symbol: str,
         date_str: str,
         session: Session | None = None,
     ) -> dict[str, Any]:
-        owns_session = session is None
-        if owns_session:
-            session = self._get_session()
-        assert session is not None  # Type guard
-        try:
+        with session_scope(session, self._session) as session:
             stock = session.scalar(sa.select(Stock).where(Stock.symbol == symbol.upper()))
             if stock is None:
                 return {
@@ -105,14 +92,10 @@ class DataQualityService:
                 "details": details,
                 "components": components,
             }
-        finally:
-            self.close_session(session, owns_session)
 
     def evaluate_symbols_bulk(self, symbols: list[str], date_str: str) -> list[dict[str, Any]]:
-        session = self._get_session()
-        owns_session = self._session is None
         results = []
-        try:
+        with session_scope(self._session) as session:
             stocks = session.scalars(
                 sa.select(Stock).where(Stock.symbol.in_([s.upper() for s in symbols]))
             ).all()
@@ -186,16 +169,9 @@ class DataQualityService:
 
             session.commit()
             return results
-        finally:
-            if owns_session:
-                session.close()
 
     def evaluate_daily_report(self, session: Session | None = None) -> dict:
-        owns_session = session is None
-        if owns_session:
-            session = self._get_session()
-        assert session is not None  # Type guard
-        try:
+        with session_scope(session, self._session) as session:
             today = datetime.now(UTC).date()
             price_count = session.scalar(
                 sa.select(sa.func.count()).select_from(Price).where(Price.date == today)
@@ -208,13 +184,9 @@ class DataQualityService:
                 "price_count": price_count or 0,
                 "trust_count": trust_count or 0,
             }
-        finally:
-            self.close_session(session, owns_session)
 
     def generate_daily_report(self, report_date: str | None = None) -> dict[str, Any]:
-        session = self._get_session()
-        owns_session = self._session is None
-        try:
+        with session_scope(self._session) as session:
             target_date = (
                 datetime.strptime(report_date, "%Y-%m-%d").date()
                 if report_date
@@ -292,14 +264,9 @@ class DataQualityService:
                 "validation_pass_rate": validation_pass_rate,
                 "quality_by_symbol": quality_by_symbol,
             }
-        finally:
-            if owns_session:
-                session.close()
 
     def get_symbol_trust_trend(self, symbol: str, window: int = 30) -> dict[str, Any]:
-        session = self._get_session()
-        owns_session = self._session is None
-        try:
+        with session_scope(self._session) as session:
             stock = session.scalar(sa.select(Stock).where(Stock.symbol == symbol.upper()))
             if stock is None:
                 return {"symbol": symbol.upper(), "trend": None}
@@ -332,16 +299,11 @@ class DataQualityService:
                     "total_days": len(scores),
                 },
             }
-        finally:
-            if owns_session:
-                session.close()
 
     def check_data_freshness(
         self, symbol: str, target_date: str, expected_hours: float = 16.0
     ) -> dict[str, Any]:
-        session = self._get_session()
-        owns_session = self._session is None
-        try:
+        with session_scope(self._session) as session:
             stock = session.scalar(sa.select(Stock).where(Stock.symbol == symbol.upper()))
             if stock is None:
                 return {"symbol": symbol.upper(), "fresh": False, "reason": "stock_not_found"}
@@ -371,16 +333,11 @@ class DataQualityService:
                 "fresh": True,
                 "last_update": latest_price.date.isoformat(),
             }
-        finally:
-            if owns_session:
-                session.close()
 
     def cross_validate_sources(
         self, symbol: str, date_str: str, price_field: str = "close"
     ) -> dict[str, Any]:
-        session = self._get_session()
-        owns_session = self._session is None
-        try:
+        with session_scope(self._session) as session:
             stock = session.scalar(sa.select(Stock).where(Stock.symbol == symbol.upper()))
             if stock is None:
                 return {"symbol": symbol.upper(), "match": False, "reason": "stock_not_found"}
@@ -461,16 +418,11 @@ class DataQualityService:
                     if abs(v - current_val) / current_val >= 0.05
                 },
             }
-        finally:
-            if owns_session:
-                session.close()
 
     def get_alerts(
         self, report_id: int | None = None, acknowledged: bool = False
     ) -> list[dict[str, Any]]:
-        session = self._get_session()
-        owns_session = self._session is None
-        try:
+        with session_scope(self._session) as session:
             query = sa.select(DataQualityAlert)
             if report_id is not None:
                 query = query.where(DataQualityAlert.report_id == report_id)
@@ -490,28 +442,18 @@ class DataQualityService:
                 }
                 for a in alerts
             ]
-        finally:
-            if owns_session:
-                session.close()
 
     def acknowledge_alert(self, alert_id: int) -> bool:
-        session = self._get_session()
-        owns_session = self._session is None
-        try:
+        with session_scope(self._session) as session:
             alert = session.get(DataQualityAlert, alert_id)
             if alert is None:
                 return False
             alert.acknowledged = True
             session.commit()
             return True
-        finally:
-            if owns_session:
-                session.close()
 
     def get_system_mode(self) -> dict[str, Any]:
-        session = self._get_session()
-        owns_session = self._session is None
-        try:
+        with session_scope(self._session) as session:
             stocks = list(session.scalars(sa.select(Stock)).all())
             if not stocks:
                 mode_result = {
@@ -550,9 +492,6 @@ class DataQualityService:
             }
             self._persist_system_mode(session, mode_result)
             return mode_result
-        finally:
-            if owns_session:
-                session.close()
 
     def _persist_system_mode(self, session: Session, mode_result: dict[str, Any]) -> None:
         history = SystemModeHistory(
@@ -565,9 +504,7 @@ class DataQualityService:
         session.commit()
 
     def get_source_accuracy_score(self, source_id: int, session: Session | None = None) -> float:
-        owns_session = session is None and self._session is None
-        sess = session or self._get_session()
-        try:
+        with session_scope(session, self._session) as sess:
             logs = list(
                 sess.scalars(
                     sa.select(IngestionLog)
@@ -584,16 +521,11 @@ class DataQualityService:
             avg_rejected = sum(log.records_rejected for log in logs) / len(logs)
             rejection_penalty = min(0.3, avg_rejected / 100.0)
             return max(0.0, success_rate - rejection_penalty)
-        finally:
-            if owns_session:
-                sess.close()
 
     def calculate_weighted_price(
         self, symbol: str, date_str: str, price_field: str = "close"
     ) -> float | None:
-        session = self._get_session()
-        owns_session = self._session is None
-        try:
+        with session_scope(self._session) as session:
             stock = session.scalar(sa.select(Stock).where(Stock.symbol == symbol.upper()))
             if stock is None:
                 return None
@@ -628,14 +560,9 @@ class DataQualityService:
             weighted_sum = sum(v * w for v, w in values_with_weights)
             total_weight = sum(w for _, w in values_with_weights)
             return weighted_sum / total_weight if total_weight > 0 else None
-        finally:
-            if owns_session:
-                session.close()
 
     def detect_source_drift(self, source_id: int, window: int = 10) -> dict[str, Any]:
-        session = self._get_session()
-        owns_session = self._session is None
-        try:
+        with session_scope(self._session) as session:
             logs = list(
                 session.scalars(
                     sa.select(IngestionLog)
@@ -678,15 +605,10 @@ class DataQualityService:
                 },
                 "ratio": current_avg / historical_avg if historical_avg > 0 else 0,
             }
-        finally:
-            if owns_session:
-                session.close()
 
     def recover_blacklisted_sources(self, recovery_threshold: float = 0.5) -> list[dict[str, Any]]:
-        session = self._get_session()
-        owns_session = self._session is None
         recovered = []
-        try:
+        with session_scope(self._session) as session:
             sources = list(
                 session.scalars(
                     sa.select(DataSource).where(
@@ -713,15 +635,10 @@ class DataQualityService:
 
             session.commit()
             return recovered
-        finally:
-            if owns_session:
-                session.close()
 
     def apply_trust_decay(self, days_threshold: int = 30, decay_factor: float = 0.95) -> int:
-        session = self._get_session()
-        owns_session = self._session is None
         decayed_count = 0
-        try:
+        with session_scope(self._session) as session:
             threshold_date = datetime.now(UTC).date() - timedelta(days=days_threshold)
             old_trusts = list(
                 session.scalars(sa.select(DataTrust).where(DataTrust.date <= threshold_date)).all()
@@ -736,9 +653,6 @@ class DataQualityService:
 
             session.commit()
             return decayed_count
-        finally:
-            if owns_session:
-                session.close()
 
     def _generate_alerts(
         self,
@@ -835,9 +749,7 @@ class DataQualityService:
         return result.get("safe", False) and result.get("trust_score", 0.0) >= threshold
 
     def get_symbol_quality_summary(self, symbol: str) -> dict[str, Any]:
-        session = self._get_session()
-        owns_session = self._session is None
-        try:
+        with session_scope(self._session) as session:
             stock = session.scalar(sa.select(Stock).where(Stock.symbol == symbol.upper()))
             if stock is None:
                 return {
@@ -899,9 +811,6 @@ class DataQualityService:
                 "unsafe_pct": unsafe_days / len(records),
                 "common_issues": common_issues,
             }
-        finally:
-            if owns_session:
-                session.close()
 
     def _compute_trust_score(
         self, session: Session, stock_id: int, price: Any
@@ -1098,9 +1007,7 @@ class DataQualityService:
     def detect_source_correlations(
         self, symbols: list[str] | None = None, window_days: int = 30, threshold: float = 0.8
     ) -> list[dict[str, Any]]:
-        session = self._get_session()
-        owns_session = self._session is None
-        try:
+        with session_scope(self._session) as session:
             sources = session.scalars(sa.select(DataSource)).all()
             if len(sources) < 2:
                 return []
@@ -1122,9 +1029,6 @@ class DataQualityService:
                         self._persist_source_correlation(session, src_a.id, src_b.id, correlation)
 
             return correlations
-        finally:
-            if owns_session:
-                session.close()
 
     def _compute_source_correlation(
         self,
@@ -1225,9 +1129,7 @@ class DataQualityService:
         symbol: str | None = None,
         expires_hours: int | None = None,
     ) -> dict[str, Any]:
-        session = self._get_session()
-        owns_session = self._session is None
-        try:
+        with session_scope(self._session) as session:
             target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
             expires_at = None
             if expires_hours:
@@ -1252,16 +1154,11 @@ class DataQualityService:
                 "symbol": override.symbol,
                 "sensitivity_multiplier": override.sensitivity_multiplier,
             }
-        finally:
-            if owns_session:
-                session.close()
 
     def get_active_event_overrides(
         self, date_str: str, symbol: str | None = None
     ) -> list[dict[str, Any]]:
-        session = self._get_session()
-        owns_session = self._session is None
-        try:
+        with session_scope(self._session) as session:
             target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
             query = sa.select(EventOverride).where(EventOverride.date == target_date)
             if symbol:
@@ -1289,18 +1186,11 @@ class DataQualityService:
                         }
                     )
             return active
-        finally:
-            if owns_session:
-                session.close()
 
     def evaluate_with_event_override(
         self, symbol: str, date_str: str, session: Session | None = None
     ) -> dict[str, Any]:
-        owns_session = session is None
-        if owns_session:
-            session = self._get_session()
-        assert session is not None  # Type guard
-        try:
+        with session_scope(session, self._session) as session:
             overrides = self.get_active_event_overrides(date_str, symbol)
             multiplier = 1.0
             for o in overrides:
@@ -1314,5 +1204,3 @@ class DataQualityService:
                 result["sensitivity_multiplier"] = multiplier
 
             return result
-        finally:
-            self.close_session(session, owns_session)
