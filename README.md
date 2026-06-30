@@ -1,5 +1,3 @@
-<div align="center">
-
 # 📈 NEPSE AI Trading Research Platform
 
 **An advisory-only quantitative research platform for the Nepal Stock Exchange (NEPSE) — combining data-quality assurance, technical analysis, realistic backtesting, and explainable ML signal fusion.**
@@ -11,8 +9,6 @@
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-261230.svg)](https://github.com/astral-sh/ruff)
 [![Version](https://img.shields.io/badge/version-1.0%20(MVP)-success.svg)](#-implementation-roadmap)
 [![License](https://img.shields.io/badge/license-Proprietary-lightgrey.svg)](#-license)
-
-</div>
 
 > [!IMPORTANT]
 > **This project is research-only.** It does **not** provide financial advice, guarantee profit, or execute live trades. All outputs are advisory and require human review. There is no live broker execution and no autonomous trading.
@@ -116,7 +112,7 @@ The system is organized into three layers:
 ### Installation
 
 <details open>
-<summary><strong>Windows (PowerShell)</strong></summary>
+<summary>**Windows (PowerShell)**</summary>
 
 ```powershell
 # 1. Clone the repository
@@ -138,7 +134,7 @@ copy .env.example .env
 </details>
 
 <details>
-<summary><strong>macOS / Linux (bash)</strong></summary>
+<summary>**macOS / Linux (bash)**</summary>
 
 ```bash
 # 1. Clone the repository
@@ -168,7 +164,6 @@ Copy `.env.example` to `.env` and fill in the required values. Key variables:
 | `DATABASE_URL` | PostgreSQL connection string |
 | `REDIS_URL` | Redis connection string |
 | `JWT_SECRET_KEY` | Secret for JWT auth (min. 32 chars) |
-| `SHARESANSAR_API_URL` | Primary data source endpoint |
 | `MLFLOW_TRACKING_URI` | MLflow tracking server URI |
 
 > [!WARNING]
@@ -212,6 +207,23 @@ python scripts/seed_symbols.py
 
 Populates the database with NEPSE stock symbols for initial testing.
 
+### Scrape & Ingest Market Data
+
+Price data is scraped independently of the backend and ingested from CSV:
+
+```bash
+python nepse_data/scraper.py --today          # scrape ShareSansar + Merolagani -> nepse_data/data/
+# then ingest the scraped CSVs into the prices table:
+curl -X POST "http://localhost:8000/market/ingest/batch?symbol=NABIL" \
+     -H "Content-Type: application/json" -d '{"source": "csv_ingestion"}'
+```
+
+The scraper writes one CSV per source per day to `nepse_data/data/{sharesansar,merolagani}/YYYY-MM-DD.csv`.
+`CsvIngestionService` (`backend/app/services/csv_ingestion.py`) reads those files, normalizes both
+sources to OHLCV (Merolagani floor-sheet ticks are aggregated per symbol), merges them on
+`(symbol, date)`, and upserts into `prices`. Symbols must already exist in `stocks` (seed first);
+unresolved symbols are skipped and reported. Omit `symbol` from the request to ingest all symbols.
+
 ### Database Migrations
 
 ```bash
@@ -237,7 +249,7 @@ Start with [`research/notebooks/`](research/notebooks/) (`01_idea_to_backtest.ip
 The REST API exposes auth, market data, features, data quality, strategies/backtests, signals, ML, portfolio, explainability, governance, MLOps, and analytics routes. Full interactive docs are available at `/docs` when the API is running.
 
 <details>
-<summary><strong>View full endpoint table</strong></summary>
+<summary>**View full endpoint table**</summary>
 
 | Method | Endpoint | Description |
 | --- | --- | --- |
@@ -304,7 +316,7 @@ The REST API exposes auth, market data, features, data quality, strategies/backt
 ## 📂 Project Structure
 
 <details>
-<summary><strong>View directory tree</strong></summary>
+<summary>**View directory tree**</summary>
 
 ```text
 .
@@ -430,7 +442,7 @@ This project is currently **proprietary — all rights reserved**. No license fo
 
 ## 👤 Maintainer
 
-**Aashish Paudel**
+### Aashish Paudel
 
 - GitHub: [@Aashish-po](https://github.com/Aashish-po)
 - Repository: [Nepse-AI-Trading-System](https://github.com/Aashish-po/Nepse-AI-Trading-System)
