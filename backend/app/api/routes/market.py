@@ -8,7 +8,7 @@ from app.models.stock import Stock
 from app.models.user import User
 from app.schemas.ingestion import IngestionRequest
 from app.schemas.market import PriceIngestRequest, PriceResponse
-from app.services.ingestion import IngestionService
+from app.services.csv_ingestion import CsvIngestionService
 from app.services.market import ingest_price, list_prices
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
@@ -61,18 +61,18 @@ def ingest_market_price(
 @router.post("/ingest/batch", status_code=status.HTTP_202_ACCEPTED)
 def ingest_batch(
     payload: IngestionRequest,
-    symbol: str,
     user: CurrentUser,
     db: DbSession,
+    symbol: str | None = None,
 ) -> dict[str, object]:
-    service = IngestionService(source=payload.source)
+    service = CsvIngestionService(session=db, source=payload.source)
     result = service.run(
         symbol=symbol,
         start_date=payload.start_date,
         end_date=payload.end_date,
         dry_run=payload.dry_run,
     )
-    return {"symbol": symbol.upper(), **result}
+    return {"symbol": symbol.upper() if symbol else "ALL", **result}
 
 
 @router.get("/overview")

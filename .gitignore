@@ -49,11 +49,6 @@ pip-wheel-metadata/
 .pytest_cache/
 
 # Data and generated research outputs
-# Keep raw .gitkeep for git tracking
-data/raw/*
-!data/raw/.gitkeep
-data/processed/
-data/reports/
 artifacts/
 reports/
 exports/

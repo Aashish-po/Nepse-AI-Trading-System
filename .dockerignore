@@ -21,7 +21,6 @@ __pycache__/
 *.sqlite3
 mlruns/
 exports/
-data/raw/*
 
 # Secrets & local env
 .env
