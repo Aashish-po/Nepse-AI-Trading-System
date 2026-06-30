@@ -8,7 +8,7 @@
 [![Python](https://img.shields.io/badge/python-3.12-blue.svg)](https://www.python.org/downloads/)
 [![Code style: ruff](https://img.shields.io/badge/code%20style-ruff-261230.svg)](https://github.com/astral-sh/ruff)
 [![Version](https://img.shields.io/badge/version-1.0%20(MVP)-success.svg)](#-implementation-roadmap)
-[![License](https://img.shields.io/badge/license-Proprietary-lightgrey.svg)](#-license)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 > [!IMPORTANT]
 > **This project is research-only.** It does **not** provide financial advice, guarantee profit, or execute live trades. All outputs are advisory and require human review. There is no live broker execution and no autonomous trading.
@@ -64,9 +64,9 @@ These are research/evaluation gates — **not** guarantees of trading profit.
 - **Data-quality gating** — automated trust scoring (completeness, consistency, freshness, volume, cross-source) with `NORMAL` / `DEGRADED` / `SAFE_MODE` system states.
 - **Realistic backtesting** — fees (0.5%), slippage (5 bps), liquidity filters, partial fills, execution delay, stop-loss / take-profit / trailing-stop exits, and benchmark comparison.
 - **Explainable signal fusion** — combines technical, ML, and sentiment signals with calibrated confidence and feature attribution (SHAP).
-- **Machine learning suite** — baseline models (logistic / random forest / XGBoost), LSTM forecasting, XLM-R sentiment, and experimental RL/GNN research modules (PPO, DQN, GNN, meta-learning).
+- **Machine learning suite** — baseline models (logistic / random forest / XGBoost), LSTM forecasting, XLM-R sentiment, and an experimental meta-learning research module (RL/GNN planned, not yet implemented).
 - **MLOps & governance** — model registry, drift monitoring, automated retraining, and human-approval promotion gates.
-- **12-page Streamlit dashboard** + a notebook-driven research workflow and a full REST API with auto-generated Swagger docs.
+- **15-page Streamlit dashboard** + a notebook-driven research workflow and a full REST API with auto-generated Swagger docs.
 
 ---
 
@@ -94,7 +94,7 @@ The system is organized into three layers:
 | **Backend & API** | Python 3.12, FastAPI, Uvicorn, Pydantic v2 |
 | **Database & ORM** | PostgreSQL 13+ (TimescaleDB optional), SQLAlchemy 2.0, Alembic |
 | **Cache & Queue** | Redis |
-| **ML & Tracking** | scikit-learn, XGBoost, PyTorch (LSTM/RL), MLflow, NumPy/Pandas |
+| **ML & Tracking** | scikit-learn, XGBoost, PyTorch (LSTM), MLflow, NumPy/Pandas |
 | **Dashboard & Research** | Streamlit, Jupyter, Plotly |
 | **DevOps** | Docker & Docker Compose, GitHub Actions, Kubernetes (`infra/k8s/`) |
 | **Quality** | pytest, ruff, mypy |
@@ -197,7 +197,7 @@ pip install -r dashboard/requirements-dashboard.txt
 streamlit run dashboard/app.py
 ```
 
-The dashboard runs at <http://localhost:8501> with 12 pages: Market Overview, Strategies, Backtesting, Signals, Features, Data Sources, Alerts, System Status, ML Models, Analytics, MLOps, and Explainability.
+The dashboard runs at <http://localhost:8501> with 15 pages: Market Overview, Strategies, Backtesting, Signals, Live Signals, Features, Data Sources, Alerts, System Status, ML Models, Analytics, MLOps, Explainability, Paper Trading, and Factor Analysis.
 
 ### Seed Symbol Data
 
@@ -340,14 +340,13 @@ The REST API exposes auth, market data, features, data quality, strategies/backt
 │   │   └── db/migrations/    # Alembic revisions 0001 … 0011
 │   └── tests/                # pytest suite (incl. phase gates)
 │
-├── ml/                       # ML / research modules (training, lstm, sentiment, ppo, dqn, gnn, ...)
+├── ml/                       # ML / research modules (training, inference, lstm, sentiment, meta_learning, ...)
 ├── strategies/               # Strategy definitions and experiments
 ├── backtesting/              # Backtesting helpers
-├── features/                 # Feature helpers
-├── data/                     # Data loaders, ingestion, validation
+├── features/                 # Technical indicators (features/indicators.py)
 ├── scripts/                  # seed_symbols.py, smoke_test.py, backup_db.sh
 │
-├── dashboard/                # Streamlit dashboard (single app, 12 pages)
+├── dashboard/                # Streamlit dashboard (single app, 15 pages)
 ├── research/notebooks/       # Idea → backtest → integrate notebook workflow
 ├── docs/                     # Reference specs (ARCHITECTURE, PHASES, SUCCESS_METRICS, ...)
 ├── infra/                    # docker-compose.yml, docker/, k8s/
@@ -360,7 +359,7 @@ The REST API exposes auth, market data, features, data quality, strategies/backt
 
 ## 🗺 Implementation Roadmap
 
-All 15 phases (0–14) are implemented in code and covered by tests. Phase numbering matches the phase-gated test suite (e.g. `test_phase8_gate.py`, `test_phase10_integration.py`, `test_phase14_experimental.py`).
+Phases 0–13 are implemented in code; Phase 14 (experimental AI) is partially present — `ml/meta_learning.py` and the sentiment module exist, while RL/GNN (PPO, DQN, GNN, ensembles) are not yet implemented. Phase numbering matches the phase-gated tests (`test_phase6_validation.py`, `test_phase8_gate.py`, `test_phase10_integration.py`).
 
 | Phase | Focus Area | Key Deliverables |
 | --- | --- | --- |
@@ -378,9 +377,9 @@ All 15 phases (0–14) are implemented in code and covered by tests. Phase numbe
 | 11 | Explainability (SHAP) | Feature importance, local attribution, trade explanations, model governance |
 | 12 | MLOps / Monitoring / Retraining | Model selection, auto-retraining, hyperparameter evolution, drift monitoring |
 | 13 | Production Hardening & Deployment | Docker images, Kubernetes manifests, CI/CD, Prometheus monitoring, DB backups |
-| 14 | Experimental AI | PPO, DQN, GNN, ensembles, meta-learning (experimental research only) |
+| 14 | Experimental AI | Meta-learning research module (`ml/meta_learning.py`); PPO/DQN/GNN/ensembles not yet implemented |
 
-> Phase 14 RL/GNN modules are experimental research code. Live broker execution and autonomous trading remain **out of scope**.
+> Phase 14 RL/GNN modules are planned experimental research code and not yet implemented. Live broker execution and autonomous trading remain **out of scope**.
 
 ---
 
@@ -436,7 +435,7 @@ All advisory outputs require human review. See [`docs/RISK_DISCLAIMER.md`](docs/
 
 ## 📜 License
 
-This project is currently **proprietary — all rights reserved**. No license for reuse, redistribution, or modification is granted unless a `LICENSE` file is added to the repository. For usage or collaboration inquiries, please contact the maintainer.
+This project is licensed under the **MIT License** — see the [`LICENSE`](LICENSE) file for details.
 
 ---
 

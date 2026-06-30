@@ -1,7 +1,8 @@
 # Implementation Phases
 
-Phases 0–14 are implemented in code and covered by tests. The system remains
-research/advisory only — there is no live broker execution or autonomous trading.
+Phases 0–13 are implemented in code; Phase 14 (experimental AI) is partial —
+only the meta-learning module exists. The system remains research/advisory only
+— there is no live broker execution or autonomous trading.
 
 ## MVP Priority Order
 
@@ -15,7 +16,7 @@ research/advisory only — there is no live broker execution or autonomous tradi
 ## Phase Status (0–14)
 
 Numbering matches `Documents/6_IMPLEMENTATION_PLAN.md` and the phase-gated tests
-(`test_phase8_gate.py`, `test_phase10_integration.py`, `test_phase14_experimental.py`).
+(`test_phase6_validation.py`, `test_phase8_gate.py`, `test_phase10_integration.py`).
 
 | Phase | Scope | Status |
 |---|---|---|
@@ -33,7 +34,7 @@ Numbering matches `Documents/6_IMPLEMENTATION_PLAN.md` and the phase-gated tests
 | 11 | Explainability (SHAP) and model governance workflow | Implemented |
 | 12 | MLOps: model selection, auto-retraining policy, hyperparameter evolution, drift monitoring | Implemented |
 | 13 | Production hardening & deployment: Docker, Compose, Kubernetes, monitoring, backups, CI/CD | Implemented |
-| 14 | Experimental AI: PPO, DQN, GNN, ensembles, meta-learning (research only) | Implemented (experimental) |
+| 14 | Experimental AI: meta-learning research module (`ml/meta_learning.py`) | Partial — meta-learning only; PPO/DQN/GNN/ensembles not yet implemented |
 
 ## Production / Research Boundary
 
@@ -44,5 +45,5 @@ Numbering matches `Documents/6_IMPLEMENTATION_PLAN.md` and the phase-gated tests
 ## Deferred Work
 
 Deferred work is live broker execution and autonomous trading — not basic ML
-experimentation. The experimental RL/GNN/PPO/DQN modules exist but are advisory
-research code until live execution is in scope.
+experimentation. The experimental RL/GNN/PPO/DQN modules are planned but not yet
+implemented; only the meta-learning research module exists today.

@@ -1,4 +1,4 @@
-# Deployment (Phase 14)
+# Deployment (Phase 13)
 
 Production deployment assets for the NEPSE AI Trading research platform: Docker
 images, Docker Compose, Kubernetes manifests, monitoring, and database backups.

@@ -6,20 +6,16 @@ Machine learning modules for training, inference, and model management.
 
 ```
 ml/
+├── dataset.py           # Walk-forward dataset builder
+├── feature_vector.py    # Feature vector assembly/validation
+├── labeling.py          # Label generation for supervised training
 ├── training.py          # Walk-forward training pipeline
 ├── inference.py         # Model prediction wrapper
 ├── lstm.py              # LSTM next-day forecasting
 ├── sentiment.py         # XLM-R and lexicon sentiment analysis
-├── signal_fusion.py     # ML signal combination
 ├── explainability.py    # SHAP-based model interpretability
-├── ensemble.py          # Model ensemble implementation
-├── ppo.py             # PPO reinforcement learning (experimental)
-├── dqn.py             # DQN reinforcement learning (experimental)
-├── gnn.py             # Graph neural network (experimental)
 ├── meta_learning.py     # Meta-learning research (experimental)
 ├── model_io.py          # Model serialization/deserialization
-├── experiment_tracking.py # MLflow integration
-├── drift_monitoring.py  # Data drift detection
 └── risk_manager.py      # ML risk management
 ```
 
@@ -28,8 +24,9 @@ ml/
 - **Baseline models**: Logistic regression, Random Forest, XGBoost
 - **LSTM**: Time-series forecasting for price direction
 - **Sentiment**: XLM-R multilingual or lexicon-based sentiment
-- **RL (experimental)**: PPO and DQN for strategy optimization
-- **GNN (experimental)**: Graph-based feature relationships
+- **Meta-learning (experimental)**: research module under `meta_learning.py`
+
+> RL (PPO/DQN) and GNN modules are planned but not yet implemented.
 
 ## Training Pipeline
 
@@ -51,4 +48,4 @@ signal = predict_signal(symbol="NABIL", features=features_dict)
 
 ## Experimental Modules
 
-PPO, DQN, GNN, and meta-learning modules are for research purposes only. See Phase 14 documentation for details.
+The meta-learning module (`meta_learning.py`) is research-only. PPO, DQN, and GNN modules are planned for Phase 14 but not yet implemented.
