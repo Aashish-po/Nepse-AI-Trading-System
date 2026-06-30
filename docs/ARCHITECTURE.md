@@ -50,7 +50,8 @@ Supporting services live in `backend/app/services/`; ML/research code lives in `
 - Portfolio account state is held in-memory in the current API.
 - Risk-manager outputs are advisory; signal risk enforcement currently reports
   `enforced: false` unless wired to live portfolio sources.
-- RL/GNN/PPO/DQN modules under `ml/` are experimental research code, not live trading.
+- The meta-learning module under `ml/` is experimental research code, not live
+  trading. RL/GNN (PPO/DQN/GNN) modules are planned but not yet implemented.
 - Local runtime artifacts (trained `models/*.joblib`, `exports/`, caches, `.venv/`)
   are generated and git-ignored — they are not source artifacts.
 

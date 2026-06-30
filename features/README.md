@@ -6,32 +6,33 @@ Technical indicator calculations and feature engineering for NEPSE stocks.
 
 | Category | Indicators |
 |----------|----------|
-| Trend | SMA, EMA, ADX, MACD |
-| Momentum | RSI, ROC, Stochastic |
-| Volatility | ATR, Bollinger Bands |
-| Volume | OBV, Volume MA |
-| Returns | Daily returns, volatility |
+| Trend | SMA, EMA, MACD |
+| Momentum | RSI |
+| Volatility | ATR, rolling volatility |
+| Volume | Volume ratio |
+| Price | Daily returns, price range |
 
 ## Structure
 
 ```
 features/
 ├── indicators.py      # Technical indicator functions
-├── feature_store.py   # Point-in-time feature storage
-├── calculators.py     # Feature calculation utilities
 └── __init__.py
 ```
+
+> Point-in-time feature storage lives in the backend feature service
+> (`backend/app/services/feature.py`), not in this package.
 
 ## Usage
 
 ```python
-from features.indicators import calculate_rsi, calculate_sma
+from features.indicators import compute_rsi, compute_sma
 
 # Calculate features for a symbol
 features = {
-    "rsi": calculate_rsi(prices, window=14),
-    "sma_20": calculate_sma(prices, window=20),
-    "sma_50": calculate_sma(prices, window=50),
+    "rsi": compute_rsi(prices, period=14),
+    "sma_20": compute_sma(prices, period=20),
+    "sma_50": compute_sma(prices, period=50),
 }
 ```
 

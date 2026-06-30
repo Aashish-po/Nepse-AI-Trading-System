@@ -153,7 +153,7 @@ Test suites MUST include:
 
 ## 8. Dry-Run Integrity
 
-- Dry-run ingestion (`IngestionService.run(dry_run=True)`) MUST NOT trigger `DataQualityService.evaluate_symbol_date()`
+- Dry-run ingestion (`CsvIngestionService.run(dry_run=True)`) MUST NOT trigger `DataQualityService.evaluate_symbol_date()`
 - Quality checks apply only to persisted data
 - Dry-run results MAY include validation results (bad row counts) but MUST NOT include trust scores or quality status
 - This prevents false-positive gate failures on data that has not been committed

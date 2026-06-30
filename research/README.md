@@ -34,4 +34,4 @@ All experimental results are exported to `/exports/`:
 
 - Backend API running (`uvicorn backend.app.main:app`)
 - `API_BASE` environment variable set
-- Python 3.11 with Jupyter installed
+- Python 3.12 with Jupyter installed

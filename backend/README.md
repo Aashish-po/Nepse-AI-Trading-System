@@ -35,11 +35,13 @@ backend/
 | MLOps | `/mlops/*` (champion selection, retraining, evolution) |
 | Analytics | `/analytics/*` (market overview, signals, portfolio) |
 | Alerts | `/alerts/evaluate`, `/alerts/*` |
-| Scheduler | `/scheduler/*` (background jobs) |
+| Paper Trading | `/paper-trading/*` (accounts, orders, trade history) |
+| Streaming | `/stream/*` (live signal streaming) |
+| External | `/external/*`, `/macro/*`, `/news/*`, `/sentiment/*` (external data providers) |
 
 ## Services
 
-- **ingestion.py** - Data ingestion from multiple sources
+- **csv_ingestion.py** - Ingest scraped ShareSansar/Merolagani CSVs into the prices table
 - **data_quality.py** - Trust scoring and quality validation
 - **feature.py** - Technical indicator calculations
 - **strategy.py** - Strategy registry and backtesting
