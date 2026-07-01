@@ -305,9 +305,23 @@ def get_trust_score(symbol: str, date_str: str) -> dict | None:
 
 
 def get_daily_quality_report() -> dict | None:
-    """Get comprehensive daily data quality report."""
+    """Get comprehensive daily data quality report.
+
+    Tries the read-only GET endpoint first (no auth required); falls back to the
+    authenticated POST endpoint if the GET is unavailable.
+    """
     try:
-        res = requests.post(f"{API_BASE}/data-quality/reports/daily", timeout=60)
+        res = requests.get(f"{API_BASE}/data-quality/report-summary", timeout=60)
+        res.raise_for_status()
+        return res.json()
+    except Exception:
+        pass
+    try:
+        res = requests.post(
+            f"{API_BASE}/data-quality/reports/daily",
+            headers=auth_headers(),
+            timeout=60,
+        )
         res.raise_for_status()
         return res.json()
     except Exception:

@@ -1,9 +1,11 @@
+from datetime import UTC, date, datetime  # noqa: F401
 from typing import Annotated
 
 import sqlalchemy as sa
 from app.core.security import get_current_user
 from app.db.session import get_db
-from app.models.data_quality import SystemModeHistory
+from app.models.data_quality import DataQualityReport, SystemModeHistory
+from app.models.stock import Stock
 from app.models.user import User
 from app.schemas.data_quality import (
     DataQualityReportResponse,
@@ -154,3 +156,34 @@ def apply_trust_decay(
 def get_trust_history(symbol: str, db: DbSession, days: int = 30) -> dict:
     service = DataQualityService(session=db)
     return service.get_symbol_trust_trend(symbol, window=days)
+
+
+@router.get("/report-summary")
+def get_report_summary(db: DbSession) -> dict:
+    report = db.scalar(
+        sa.select(DataQualityReport).order_by(DataQualityReport.report_date.desc()).limit(1)
+    )
+    if report is None:
+        total_symbols = db.scalar(sa.select(sa.func.count(Stock.id)))
+        return {
+            "report_id": None,
+            "report_date": None,
+            "total_symbols": total_symbols or 0,
+            "symbols_passed": 0,
+            "symbols_failed": 0,
+            "avg_trust_score": None,
+            "total_rejected_records": 0,
+            "total_missing_dates": 0,
+            "total_volume_anomalies": 0,
+        }
+    return {
+        "report_id": report.id,
+        "report_date": report.report_date.isoformat() if report.report_date else None,
+        "total_symbols": report.total_symbols,
+        "symbols_passed": report.symbols_passed,
+        "symbols_failed": report.symbols_failed,
+        "avg_trust_score": report.avg_trust_score,
+        "total_rejected_records": report.total_rejected_records,
+        "total_missing_dates": report.total_missing_dates,
+        "total_volume_anomalies": report.total_volume_anomalies,
+    }
