@@ -6,6 +6,6 @@ ruff==0.15.20
 mypy==2.1.0
 pre-commit==4.6.0
 types-requests>=2.33.0.20260518
-plotly>=6.8.0,<7.0.0
+plotly>=6.9.0,<7.0.0
 altair>=6.2.2,<7.0.0
 
