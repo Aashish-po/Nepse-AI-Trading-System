@@ -153,8 +153,11 @@ class MLOpsService:
         """
         from datetime import date, timedelta
 
+        import numpy as np
+        import torch
+
         from ml.dataset import DatasetBuilder
-        from ml.lstm import LSTMTrainer
+        from ml.lstm import LSTMDataset, LSTMTrainer
 
         # Get date range
         end_date = date.today()
@@ -211,12 +214,31 @@ class MLOpsService:
         except Exception:
             pass
 
-        # Calculate Sharpe from validation accuracy as proxy
+        # Calculate Sharpe from validation returns instead of accuracy proxy.
         new_sharpe = 0.0
-        if result.get("metrics"):
-            val_acc = result.get("metrics", {}).get("val_acc", 0.0)
-            # Use accuracy as proxy for Sharpe (rough approximation)
-            new_sharpe = float(val_acc * 2.0) - 1.0  # Map 0.5 acc -> 0 sharpe
+        try:
+            context = train_X[-20:] if len(train_X) >= 20 else train_X
+            eval_X = np.concatenate([context, val_X], axis=0)
+            eval_y = np.concatenate(
+                [train_y[-20:] if len(train_y) >= 20 else train_y, val_y], axis=0
+            )
+            val_X_seq, _ = LSTMDataset.prepare_sequences(eval_X, eval_y)
+            val_returns = np.asarray(all_returns[train_n : train_n + len(val_X)], dtype=np.float64)
+            val_returns_seq = val_returns
+            if len(val_X_seq) and len(val_returns_seq) >= len(val_X_seq):
+                model = result.get("model")
+                if model is not None:
+                    model.eval()
+                    with torch.no_grad():
+                        logits = model(torch.FloatTensor(val_X_seq))
+                        preds = torch.argmax(logits, dim=1).cpu().numpy()
+                    positions = np.where(preds == 0, 1.0, np.where(preds == 2, -1.0, 0.0))
+                    strategy_returns = positions * val_returns_seq[: len(positions)]
+                    std = float(np.std(strategy_returns))
+                    if std > 0:
+                        new_sharpe = float(np.mean(strategy_returns) / std * np.sqrt(252.0))
+        except Exception as exc:
+            logger.warning("Failed to compute validation Sharpe for %s: %s", symbol, exc)
 
         sharpe_improvement = new_sharpe - old_sharpe
 

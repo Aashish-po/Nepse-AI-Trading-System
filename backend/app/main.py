@@ -14,6 +14,7 @@ if str(_backend_dir) not in sys.path:
     sys.path.insert(0, str(_backend_dir))
 
 # ruff: noqa: E402
+import sqlalchemy as sa
 from app.api.routes import lstm
 from app.api.routes.analytics import alerts_router, router as analytics_router
 from app.api.routes.auth import router as auth_router
@@ -38,8 +39,23 @@ from app.api.routes.signals import router as signals_router
 from app.api.routes.strategies import router as strategies_router
 from app.api.routes.streaming import router as streaming_router
 from app.core.logging import configure_logging
+from app.db.session import SessionLocal
+from app.models.data_source import DataSource
 from app.services.monitoring import metrics
 from fastapi import FastAPI, Request
+
+
+def _assert_no_active_legacy_api_sources() -> None:
+    with SessionLocal() as db:
+        active_api_sources = db.scalar(
+            sa.select(sa.func.count())
+            .select_from(DataSource)
+            .where(DataSource.is_active.is_(True), DataSource.type == "api")
+        )
+        if active_api_sources:
+            raise RuntimeError(
+                "Legacy NEPSE data sources are still active. Migrate them to scraper/csv before startup."
+            )
 
 
 def create_app() -> FastAPI:
@@ -51,6 +67,10 @@ def create_app() -> FastAPI:
         description="Quantitative trading research platform for Nepal Stock Exchange",
         version="2.0.0",
     )
+
+    @app.on_event("startup")
+    def _startup_guard() -> None:
+        _assert_no_active_legacy_api_sources()
 
     @app.middleware("http")
     async def _metrics_middleware(request: Request, call_next):  # type: ignore[no-untyped-def]

@@ -124,7 +124,6 @@ package.json
 package-lock.json
 
 # Local data / scratch (not part of the app)
-nepse_data/
 New Volume/
 *.db-journal
 *.db-shm

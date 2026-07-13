@@ -221,7 +221,9 @@ async def fuse_signal(
                         features_array = np.array(feature_arrays).T.astype(np.float32)
 
                         # Generate LSTM signal
-                        lstm_signal = fusion_engine.generate_lstm_signal(symbol, features_array)
+                        lstm_signal = fusion_engine.generate_lstm_signal_from_registry(
+                            symbol, features_array
+                        )
                         if lstm_signal is not None:
                             ml = {
                                 "signal": lstm_signal["signal"],

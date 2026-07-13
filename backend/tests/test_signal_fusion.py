@@ -2,7 +2,7 @@
 # test_signal_fusion.py
 
 import sys
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 import pytest
@@ -12,6 +12,8 @@ backend_dir = str(Path(__file__).parent.parent)
 if backend_dir not in sys.path:
     sys.path.insert(0, backend_dir)
 
+from app.models.price import Price
+from app.models.stock import Stock
 from app.services.risk_manager import (
     PositionSizingRequest,
     RiskManager,
@@ -170,3 +172,37 @@ async def test_fusion_with_weights_logging(db_session):
     # Weights should be recorded in explanation
     assert "weights_used" in fused.explanation or fused.weights_used is not None
     assert fused.weights_used is not None
+
+
+@pytest.mark.asyncio
+async def test_fusion_populates_symbol_risk_forecast(db_session):
+    """Fusion should include a market-risk forecast when recent price history exists."""
+    stock = Stock(symbol="RISKY", is_active=True)
+    db_session.add(stock)
+    db_session.flush()
+
+    for offset, close in enumerate(
+        [100.0, 101.0, 99.5, 102.0, 103.5, 101.0, 104.0, 106.0, 105.0, 107.0, 108.5, 109.0]
+    ):
+        db_session.add(
+            Price(
+                stock_id=stock.id,
+                date=date(2024, 1, 1).replace(day=min(offset + 1, 28)),
+                close=close,
+            )
+        )
+    db_session.commit()
+
+    engine = SignalFusionEngine(db_session)
+
+    fused = await engine.fuse(
+        symbol="RISKY",
+        date=datetime.utcnow(),
+        technical_signal={"signal": "BUY", "confidence": 0.8},
+        ml_signal={"probability": 0.7},
+        sentiment_signal={"score": 0.6},
+        regime="bull",
+    )
+
+    assert fused.risk_assessment["risk_forecast"] is not None
+    assert fused.risk_assessment["status"] in {"PASS", "WARN", "FAIL"}

@@ -105,3 +105,55 @@ def test_sentiment_score_to_signal():
     # Neutral sentiment
     result = sentiment_score_to_signal(0.5, 0.7)
     assert result["signal"] == "HOLD"
+
+
+def test_online_lstm_retrain_uses_validation_returns(db_session, monkeypatch):
+    """The online retrain path should derive Sharpe from validation returns."""
+    import pandas as pd
+    import torch.nn as nn
+    from app.models.model_registry import ModelRegistry
+    from app.services.mlops import MLOpsService
+
+    from ml.dataset import DatasetBuilder
+    from ml.lstm import LSTMTrainer
+
+    class DummyModel(nn.Module):
+        def forward(self, x):
+            batch = x.shape[0]
+            return torch.tensor([[4.0, 0.0, -4.0]], dtype=torch.float32).repeat(batch, 1)
+
+    all_X = pd.DataFrame([[float(i), float(i + 1)] for i in range(120)])
+    all_y = pd.Series([1] * 120)
+    all_dates = [f"2024-01-{(i % 30) + 1:02d}" for i in range(120)]
+    all_returns = [0.01, 0.02, -0.01, 0.03, 0.015, 0.005, 0.02, -0.005, 0.012, 0.018] * 12
+    all_prices = [100.0 + i for i in range(120)]
+
+    monkeypatch.setattr(
+        DatasetBuilder,
+        "_build_full_dataset",
+        lambda self, symbols, start_date, end_date: (
+            all_X,
+            all_y,
+            all_dates,
+            all_returns,
+            all_prices,
+        ),
+    )
+    monkeypatch.setattr(
+        LSTMTrainer,
+        "train_lstm",
+        lambda self, **kwargs: {
+            "model": DummyModel(),
+            "metrics": {"best_val_loss": 0.1, "val_acc": 0.9},
+            "path": kwargs["model_path"],
+        },
+    )
+
+    service = MLOpsService(db_session)
+    db_session.add(ModelRegistry(name="lstm_TEST", version="v1", metrics={"sharpe_ratio": 0.0}))
+    db_session.commit()
+
+    result = service.retrain_lstm_online("TEST", promoter_threshold=0.0, lookback_days=20)
+
+    assert result["status"] == "completed"
+    assert result["new_sharpe"] != 0.0

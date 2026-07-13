@@ -10,13 +10,11 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 class DataSource(Base):
     __tablename__ = "data_sources"
-    __table_args__ = (
-        CheckConstraint("type IN ('api', 'scraper', 'csv')", name="ck_data_sources_type"),
-    )
+    __table_args__ = (CheckConstraint("type IN ('scraper', 'csv')", name="ck_data_sources_type"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
-    type: Mapped[str] = mapped_column(String(20), nullable=False, default="api")
+    type: Mapped[str] = mapped_column(String(20), nullable=False, default="csv")
     priority: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     accuracy_score: Mapped[float] = mapped_column(Float, default=1.0, nullable=False)

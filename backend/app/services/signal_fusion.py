@@ -8,12 +8,18 @@ import os
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from pathlib import Path
 from typing import Any
 
 import numpy as np
 import torch
+from app.models.model_registry import ModelRegistry
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
+
+from ml.lstm import LSTMModel
+from ml.model_io import safe_load_torch_state_dict
+from ml.risk_models import RiskModel
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +55,16 @@ class LSTMSignalProvider:
         self.device = torch.device(device)
         if not os.path.exists(model_path):
             raise FileNotFoundError(f"LSTM model not found at {model_path}")
-        self.model = torch.load(model_path, map_location=self.device)
+        state_dict = safe_load_torch_state_dict(Path(model_path))
+        input_size = int(state_dict["lstm1.weight_ih_l0"].shape[1])
+        hidden_size = int(state_dict["fc.weight"].shape[1])
+        num_classes = int(state_dict["fc.weight"].shape[0])
+        self.model = LSTMModel(
+            input_size=input_size,
+            hidden_size=hidden_size,
+            num_classes=num_classes,
+        ).to(self.device)
+        self.model.load_state_dict(state_dict)
         self.model.eval()
         logger.info(f"Loaded LSTM model from {model_path}")
 
@@ -87,6 +102,32 @@ class SignalFusionEngine:
         self.confidence_threshold = 0.65
         # Default weights - can be overridden by dynamic computation
         self.base_weights = {"technical": 0.3, "lstm": 0.4, "sentiment": 0.3}
+
+    def generate_lstm_signal_from_registry(
+        self,
+        symbol: str,
+        features: np.ndarray,
+        model_path: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Generate an LSTM-backed signal using the latest registry artifact."""
+        path = model_path
+        if path is None:
+            entry = (
+                self.db.query(ModelRegistry)
+                .filter(ModelRegistry.name == f"lstm_{symbol.upper()}")
+                .order_by(ModelRegistry.created_at.desc())
+                .first()
+            )
+            path = entry.model_artifact_path if entry and entry.model_artifact_path else None
+        if not path:
+            return None
+
+        try:
+            provider = LSTMSignalProvider(path)
+            return provider.generate_signal(features)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Unable to generate LSTM signal for %s using %s: %s", symbol, path, exc)
+            return None
 
     async def fuse(
         self,
@@ -496,14 +537,64 @@ class SignalFusionEngine:
             "daily_loss_limit": await self._check_daily_loss(),
         }
 
+        risk_forecast = await self._forecast_symbol_risk(symbol)
+        if risk_forecast is not None:
+            risk_checks["market_risk"] = risk_forecast.get("action") != "HOLD_ONLY"
+
         failures = [check for check, passed in risk_checks.items() if not passed]
 
+        action = "PROCEED"
+        status = "PASS"
+        if failures or (risk_forecast and risk_forecast.get("action") == "HOLD_ONLY"):
+            action = "HOLD_ONLY"
+            status = "FAIL"
+        elif risk_forecast and risk_forecast.get("action") == "REDUCE":
+            action = "REDUCE"
+            status = "WARN"
+
         return {
-            "status": "PASS" if not failures else "FAIL",
-            "action": "PROCEED" if not failures else "HOLD_ONLY",
+            "status": status,
+            "action": action,
             "failed_checks": failures,
             "risk_state": risk_state or "normal",
+            "risk_forecast": risk_forecast,
         }
+
+    async def _forecast_symbol_risk(
+        self, symbol: str, lookback_days: int = 60
+    ) -> dict[str, Any] | None:
+        """Estimate short-horizon market risk from recent symbol returns."""
+        try:
+            from app.models.price import Price
+            from app.models.stock import Stock
+
+            rows = (
+                self.db.query(Price.close)
+                .join(Stock, Price.stock_id == Stock.id)
+                .filter(Stock.symbol == symbol.upper(), Price.close.is_not(None))
+                .order_by(Price.date.desc())
+                .limit(lookback_days)
+                .all()
+            )
+            closes = [float(row[0]) for row in rows if row[0] is not None]
+            if len(closes) < 10:
+                return None
+
+            closes.reverse()
+            prices = np.asarray(closes, dtype=np.float64)
+            returns = np.diff(prices) / np.where(prices[:-1] == 0, 1.0, prices[:-1])
+            if len(returns) < 5:
+                return None
+
+            model = RiskModel().fit(returns.tolist())
+            forecast = model.forecast()
+            assessment = model.to_risk_assessment(forecast)
+            assessment["source"] = "risk_models"
+            assessment["lookback_days"] = len(prices)
+            return assessment
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Could not forecast symbol risk for %s: %s", symbol, exc)
+            return None
 
     async def _check_drawdown(self) -> bool:
         """Portfolio drawdown < 15%?"""
@@ -606,20 +697,3 @@ class SignalFusionEngine:
             return daily_loss <= 0.02
         except Exception:  # pragma: no cover - defensive
             return True
-
-    # Convenience method to generate LSTM signal from features
-    def generate_lstm_signal(self, symbol: str, features: np.ndarray) -> dict[str, Any] | None:
-        """
-        Generate an LSTM signal for a symbol given its features.
-        Looks for the trained model and generates a signal if found.
-        """
-        model_path = f"models/lstm_{symbol}_v1.pt"
-        try:
-            provider = LSTMSignalProvider(model_path=model_path, device="cpu")
-            return provider.generate_signal(features)
-        except FileNotFoundError:
-            logger.warning(f"No LSTM model found for {symbol} at {model_path}")
-            return None
-        except Exception as e:
-            logger.error(f"Error generating LSTM signal for {symbol}: {e}")
-            return None

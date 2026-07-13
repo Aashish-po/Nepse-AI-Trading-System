@@ -328,7 +328,7 @@ def test_get_system_mode_degraded(db_session: Session) -> None:
 def test_source_accuracy_score(db_session: Session) -> None:
     from app.models.data_source import DataSource, IngestionLog
 
-    source = DataSource(name="TEST_SOURCE", type="api", is_active=True)
+    source = DataSource(name="TEST_SOURCE", type="scraper", is_active=True)
     db_session.add(source)
     db_session.flush()
 
@@ -368,8 +368,8 @@ def test_calculate_weighted_price(db_session: Session) -> None:
 
     _seed_price(db_session, "WP1", "2024-06-01", close=100.0, volume=1000)
 
-    src1 = DataSource(name="PRIMARY", type="api", is_active=True, accuracy_score=0.95)
-    src2 = DataSource(name="BACKUP", type="api", is_active=True, accuracy_score=0.85)
+    src1 = DataSource(name="PRIMARY", type="scraper", is_active=True, accuracy_score=0.95)
+    src2 = DataSource(name="BACKUP", type="csv", is_active=True, accuracy_score=0.85)
     db_session.add(src1)
     db_session.add(src2)
     db_session.commit()
@@ -431,7 +431,7 @@ def test_system_mode_persists_history(db_session: Session) -> None:
 def test_source_drift_detection(db_session: Session) -> None:
     from app.models.data_source import DataSource, IngestionLog
 
-    source = DataSource(name="DRIFT_TEST", type="api", is_active=True)
+    source = DataSource(name="DRIFT_TEST", type="scraper", is_active=True)
     db_session.add(source)
     db_session.flush()
 
@@ -470,7 +470,7 @@ def test_source_drift_detection(db_session: Session) -> None:
 def test_blacklist_recovery(db_session: Session) -> None:
     from app.models.data_source import DataSource, IngestionLog
 
-    source = DataSource(name="RECOVERY", type="api", is_active=False, accuracy_score=0.2)
+    source = DataSource(name="RECOVERY", type="scraper", is_active=False, accuracy_score=0.2)
     db_session.add(source)
     db_session.flush()
 
@@ -553,8 +553,8 @@ def test_trust_version_v2_calculation(db_session: Session) -> None:
 def test_source_correlation_detection(db_session: Session) -> None:
     from app.models.data_source import DataSource, IngestionLog
 
-    src1 = DataSource(name="SRC_A", type="api", is_active=True)
-    src2 = DataSource(name="SRC_B", type="api", is_active=True)
+    src1 = DataSource(name="SRC_A", type="scraper", is_active=True)
+    src2 = DataSource(name="SRC_B", type="csv", is_active=True)
     db_session.add(src1)
     db_session.add(src2)
     db_session.flush()

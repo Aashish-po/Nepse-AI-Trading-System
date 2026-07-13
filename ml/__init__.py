@@ -10,7 +10,9 @@ from ml.feature_vector import (
 )
 from ml.inference import Predictor
 from ml.labeling import LabelConfig, LabelMode, create_labels
+from ml.risk_models import RiskForecast, RiskModel
 from ml.training import ModelTrainer, TrainingResult
+from ml.trend import TREND_REGIMES, TrendAnalyzer, TrendFeatureSet, build_trend_features
 
 __all__ = [
     "DatasetBuilder",
@@ -25,6 +27,12 @@ __all__ = [
     "create_labels",
     "LabelConfig",
     "LabelMode",
+    "TREND_REGIMES",
+    "TrendAnalyzer",
+    "TrendFeatureSet",
+    "build_trend_features",
+    "RiskForecast",
+    "RiskModel",
     "ModelTrainer",
     "TrainingResult",
 ]
