@@ -104,7 +104,7 @@ def ensure_data_source(session: Session, spec: ProviderSpec) -> DataSource:
         return existing
     ds = DataSource(
         name=spec.name,
-        type="api",
+        type="scraper",
         priority=1,
         is_active=True,
         accuracy_score=spec.default_accuracy,
