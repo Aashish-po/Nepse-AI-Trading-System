@@ -18,7 +18,7 @@ xgboost==3.3.0
 # CPU-only torch: skips ~2GB of CUDA libs we don't run in the container.
 # ponytail: drop +cpu and the extra-index-url if this image ever runs on a GPU host.
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch==2.12.0+cpu
+torch==2.12.1+cpu
 mlflow==3.14.0
 joblib==1.4.2
 pyarrow==24.0.0
