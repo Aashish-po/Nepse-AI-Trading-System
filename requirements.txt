@@ -24,5 +24,5 @@ joblib==1.4.2
 pyarrow==24.0.0
 imbalanced-learn==0.13.0
 shap==0.52.0
-plotly>=6.8.0,<7.0.0
+plotly>=6.9.0,<7.0.0
 altair>=6.2.2,<7.0.0
