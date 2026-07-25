@@ -11,7 +11,7 @@ email-validator==2.3.0
 bcrypt==5.0.0
 pandas==2.3.3
 numpy==2.4.5  # ponytail: capped <2.5 — numba (via shap) requires numpy<2.5; bump when numba supports 2.5
-polars==1.0.0
+polars==1.43.0
 scikit-learn==1.9.0
 scipy==1.18.0
 xgboost==3.3.0
